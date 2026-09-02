@@ -1,12 +1,13 @@
 :root {
-  --color-bg: #fffaf3;
-  --color-surface: #ffffff;
-  --color-text: #241c15;
-  --color-primary: #6b3f2a;
-  --color-primary-dark: #4a2a1a;
-  --color-accent: #b5872a;
-  --color-border: #e2d5c3;
-  --color-pinned-bg: #fdf0d5;
+  /* Light teal / green palette */
+  --color-bg: #f2f9f7;          /* page background - pale mint */
+  --color-surface: #ffffff;     /* cards */
+  --color-text: #17302c;        /* body text - deep teal-charcoal */
+  --color-primary: #1f7a70;     /* header band, buttons, links */
+  --color-primary-dark: #14574f;/* nav links, footer, choir chip, button hover */
+  --color-accent: #358a6d;      /* nav hover/active, badges */
+  --color-border: #cfe6df;      /* card / input borders - soft green-grey */
+  --color-pinned-bg: #e4f3ec;   /* pinned cards, placeholder notes - pale green */
   --max-width: 900px;
   --radius: 10px;
 }
