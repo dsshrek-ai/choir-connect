@@ -110,12 +110,7 @@ saves it — which needs the file host to allow cross-origin reads. Create/uploa
 
 Until this is in place, Download falls back to opening the file in a new tab.
 
-## 9. Add it to the personal apps index
-
-Add a tile for Choir Connect to `DennisApps/personalapps.html` and re-upload that
-file to seniorfamily.org (it isn't deployed by git).
-
-## 10. Volunteer sign-ups
+## 9. Volunteer sign-ups
 
 The Volunteer page (`volunteer.html`) lets members claim slots on volunteer needs
 the admin posts, and cancel their own signup. It was added after the first
