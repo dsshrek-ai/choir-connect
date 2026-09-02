@@ -300,6 +300,7 @@ function captureSsoEmail() {
 const NAV_ITEMS = [
   { Label: 'Home', PageFile: 'index.html' },
   { Label: 'Schedule', PageFile: 'schedule.html' },
+  { Label: 'Members', PageFile: 'members.html' },
   { Label: 'Rehearsal Tracks', PageFile: 'programs.html' },
   { Label: 'Volunteer', PageFile: 'volunteer.html' },
 ];

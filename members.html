@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Members | Choir Connect</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <h1>Choir Connect</h1>
+  <nav class="site-nav" id="site-nav"></nav>
+  <div id="choir-picker" class="choir-picker"></div>
+</header>
+<main id="main-content">
+  <h2>Members</h2>
+  <label class="member-toggle">
+    <input type="checkbox" id="show-past"> Show past members
+  </label>
+  <div id="status" class="placeholder-note" style="display:none;"></div>
+  <div id="content">Loading members&hellip;</div>
+</main>
+<footer class="site-footer">Choir Connect</footer>
+<script src="js/api.js"></script>
+<script>
+  const SHOW_PAST_KEY = 'ccShowPastMembers';
+  const contentEl = document.getElementById('content');
+  const statusEl = document.getElementById('status');
+  const showPastEl = document.getElementById('show-past');
+
+  function showStatus(msg) {
+    if (!msg) { statusEl.style.display = 'none'; return; }
+    statusEl.textContent = msg;
+    statusEl.style.display = '';
+  }
+
+  function memberCard(m, i) {
+    const past = m.Status && m.Status.toLowerCase() === 'past';
+    const addressHtml = m.Address
+      ? `<p class="member-line">📍 ${m.MapLink
+            ? `<a href="${escapeHtml(m.MapLink)}" target="_blank" rel="noopener">${escapeHtml(m.Address)}</a>`
+            : escapeHtml(m.Address)}</p>`
+      : '';
+    let privacy = '';
+    if (m.IsMe) {
+      privacy = `
+        <div class="member-privacy" data-i="${i}">
+          <p><strong>Your info</strong> — hide any of these from other members:</p>
+          <label><input type="checkbox" data-priv="address" ${m.HideAddress ? 'checked' : ''}> Hide my address</label>
+          <label><input type="checkbox" data-priv="phone" ${m.HidePhone ? 'checked' : ''}> Hide my phone</label>
+          <label><input type="checkbox" data-priv="email" ${m.HideEmail ? 'checked' : ''}> Hide my email</label>
+        </div>
+      `;
+    }
+    return `
+      <div class="card member-card${past ? ' member-past' : ''}">
+        ${m.PhotoUrl ? `<img class="member-photo" src="${escapeHtml(m.PhotoUrl)}" alt="">` : ''}
+        <div class="member-body">
+          <h3>${escapeHtml(m.Name || 'Member')}${past ? ' <span class="badge">Past</span>' : ''}</h3>
+          ${addressHtml}
+          ${contactButtonsHtml(m.Phone, m.Email)}
+          ${privacy}
+        </div>
+      </div>
+    `;
+  }
+
+  let members = [];
+
+  async function render() {
+    showStatus('');
+    const includePast = showPastEl.checked;
+    members = await fetchChoirData('members', includePast ? { includePast: '1' } : {});
+    if (!Array.isArray(members) || members.length === 0) {
+      contentEl.innerHTML = `<p class="placeholder-note">${includePast
+        ? 'No members on the roster for this choir yet.'
+        : 'No current members on the roster for this choir yet.'}</p>`;
+      return;
+    }
+    contentEl.innerHTML = members.map(memberCard).join('');
+    contentEl.querySelectorAll('.member-privacy input[data-priv]').forEach(cb => {
+      cb.addEventListener('change', () => savePrivacy(cb.closest('.member-privacy')));
+    });
+  }
+
+  async function savePrivacy(box) {
+    const get = (k) => box.querySelector(`input[data-priv="${k}"]`).checked ? 1 : 0;
+    box.querySelectorAll('input').forEach(i => i.disabled = true);
+    try {
+      const res = await postAction('patchMyPrivacy', {
+        choir: getActiveChoir(),
+        hideAddress: get('address'),
+        hidePhone: get('phone'),
+        hideEmail: get('email'),
+      });
+      if (!res.ok) {
+        showStatus("Couldn't save that just now. Please try again.");
+        box.querySelectorAll('input').forEach(i => i.disabled = false);
+        return;
+      }
+      showStatus('Saved.');
+      await render();
+    } catch (e) {
+      handleFetchError(contentEl, e);
+    }
+  }
+
+  (async () => {
+    try {
+      await captureSsoEmail();
+      await ensureActiveChoir();
+      let stored = false;
+      try { stored = localStorage.getItem(SHOW_PAST_KEY) === '1'; } catch (e) {}
+      showPastEl.checked = stored;
+      showPastEl.addEventListener('change', () => {
+        try { localStorage.setItem(SHOW_PAST_KEY, showPastEl.checked ? '1' : '0'); } catch (e) {}
+        render();
+      });
+      await render();
+    } catch (e) {
+      handleFetchError(contentEl, e);
+    }
+  })();
+</script>
+</body>
+</html>

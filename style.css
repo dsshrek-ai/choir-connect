@@ -327,6 +327,57 @@ form label {
 
 .sched-past { opacity: 0.6; }
 
+/* Members (members.html) */
+.member-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+  margin: 0.25rem 0 1rem;
+}
+
+.member-toggle input { width: auto; }
+
+.member-card {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.member-card h3 { margin-top: 0; }
+
+.member-photo {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+}
+
+.member-body { flex: 1; min-width: 0; }
+
+.member-line { margin: 0.25rem 0; }
+
+.member-past { opacity: 0.65; }
+
+.member-privacy {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.92rem;
+}
+
+.member-privacy p { margin: 0 0 0.4rem; }
+
+.member-privacy label {
+  display: block;
+  font-weight: normal;
+  margin: 0.15rem 0;
+}
+
+.member-privacy input { width: auto; margin-right: 0.4rem; }
+
 .song-parts {
   display: flex;
   flex-direction: column;

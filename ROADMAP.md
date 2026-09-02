@@ -17,9 +17,17 @@ Status of the app and what's planned next. See `STACK.md` for architecture and
   past events kept (dimmed, under a "Past" divider). Location links to Google
   Maps (a pasted map URL wins, else a maps search on the location text).
   API: `schedule`; table `cc_schedule`; admin editor `Schedule`.
+- **Member List** — `members.html`: per-choir roster with photo, contact
+  buttons (Call / Text / Email), and a maps link for the address. Each member
+  has a **Current / Past** status; the page hides Past members unless the
+  viewer ticks **"Show past members"** (default off, choice remembered). A
+  singer whose login email matches their row can hide their own address / phone
+  / email from other members (`patchMyPrivacy`); hidden fields are stripped
+  from the API for everyone except that singer and the admin kiosk. API:
+  `members`; table `cc_members`; admin editor `Members`.
 - **Admin kiosk** (`admin.html`) — generic editor for Choirs, Programs,
   RehearsalTracks, ChoirUsers (assign users to choirs), VolunteerTasks,
-  VolunteerSignups, Schedule.
+  VolunteerSignups, Schedule, Members.
 - **Two-layer auth** — My Apps Hub `app_access` grant (`choir-connect` /
   `choir-connect-admin`) + `cc_choir_users` per-choir scoping. Usage logged to
   the shared `app_usage_log`.
@@ -39,16 +47,7 @@ Grouping by number is the model; the fix is consistent data entry.
 
 ## Planned
 
-### 1. Member List
-
-`cc_members (choir_number, name, address, phone, email, photo_url, hide_address,
-hide_phone, hide_email, sort_order)`. `members.html` renders contact cards with
-Call / Text / Email buttons (`contactButtonsHtml`, already in `js/api.js`) and a
-maps link for the address. Admin maintains the rows; a singer whose login email
-matches their row gets a small `patchMyPrivacy` action toggling only their three
-`hide_*` flags. Photo = pasted image URL.
-
-### 2. Configurable nav (if the fixed nav becomes limiting)
+### 1. Configurable nav (if the fixed nav becomes limiting)
 
 `cc_nav_items` + a `navItems` action, mirroring the member app's
 `choir_nav_items`, so the top nav is admin-editable instead of the `NAV_ITEMS`

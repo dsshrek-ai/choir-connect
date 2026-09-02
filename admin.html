@@ -65,6 +65,7 @@
     VolunteerTasks: ['ChoirNumber', 'Date', 'TaskName', 'SlotsNeeded', 'Index'],
     VolunteerSignups: ['ChoirNumber', 'Date', 'TaskName', 'VolunteerName', 'PhoneNumber', 'Email', 'Timestamp'],
     Schedule: ['ChoirNumber', 'Date', 'Time', 'Title', 'Location', 'MapUrl', 'Instructions', 'Notes', 'Index'],
+    Members: ['ChoirNumber', 'Name', 'Status', 'Address', 'Phone', 'Email', 'PhotoUrl', 'HideAddress', 'HidePhone', 'HideEmail', 'Index'],
   };
   const TABLE_HINTS = {
     Choirs: 'One row per choir. FolderSlug is the folder name under the files root that holds this choir’s Songs/ folder (e.g. "DeciBelles"). Index sets the order in the choir picker.',
@@ -74,9 +75,12 @@
     VolunteerTasks: 'Volunteer needs for a choir. Date is optional. SlotsNeeded is how many people can sign up. Index orders the list on the member Volunteer page.',
     VolunteerSignups: 'Read-only, mostly — members add these from the Volunteer page. Email is the member’s login; that’s how "cancel my signup" finds their row. Delete a row here to free a slot.',
     Schedule: 'Rehearsals and events for a choir. Time is free text ("7:00 PM"). Leave MapUrl blank to auto-link the Location text to Google Maps, or paste a specific map link. The member page shows newest first and keeps past events; same-day order is by Index.',
+    Members: 'The choir roster. Status "Past" hides the member unless a viewer ticks "Show past members". Email must match the member’s login for them to manage their own Hide flags on the Members page (you can also set the flags here). PhotoUrl is a pasted image link.',
   };
   const NUMBER_COLUMNS = new Set(['ChoirNumber', 'ProgramNumber', 'SongNumber', 'Sequence', 'TrackSequence', 'SlotsNeeded', 'Index']);
   const DATE_COLUMNS = new Set(['Date']);
+  const STATUS_COLUMNS = new Set(['Status']);
+  const BOOL_COLUMNS = new Set(['HideAddress', 'HidePhone', 'HideEmail']);
 
   const loginScreen = document.getElementById('login-screen');
   const panel = document.getElementById('panel');
@@ -178,6 +182,20 @@
     if (DATE_COLUMNS.has(col)) {
       // value is 'YYYY-MM-DD' from the API, or '' -- what <input type="date"> wants.
       return `<input type="date" data-col="${col}" value="${safeVal}">`;
+    }
+    if (STATUS_COLUMNS.has(col)) {
+      const v = (value || 'Current');
+      return `<select data-col="${col}">
+        <option value="Current" ${v === 'Current' ? 'selected' : ''}>Current</option>
+        <option value="Past" ${v === 'Past' ? 'selected' : ''}>Past</option>
+      </select>`;
+    }
+    if (BOOL_COLUMNS.has(col)) {
+      const yes = Number(value) === 1;
+      return `<select data-col="${col}">
+        <option value="0" ${yes ? '' : 'selected'}>No</option>
+        <option value="1" ${yes ? 'selected' : ''}>Yes</option>
+      </select>`;
     }
     if (NUMBER_COLUMNS.has(col)) {
       return `<input type="number" data-col="${col}" value="${escapeHtml(value ?? '0')}">`;

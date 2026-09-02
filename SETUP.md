@@ -143,6 +143,26 @@ first, with past events kept on the list. Added after the Volunteer feature, so:
    `MapUrl` (leave blank to auto-link the Location to Google Maps, or paste a
    specific link), `Instructions`, `Notes`, `Index` (order among same-day events).
 
+## 11. Member List
+
+The Members page (`members.html`) shows a choir's roster. Added after Schedule, so:
+
+1. **Database** — run the `cc_members` `CREATE TABLE` from `api/schema.sql` (the
+   "SCHEMA CHANGE: Member List" block) in phpMyAdmin.
+2. **Redeploy** — re-upload `api/api.php`, and push the repo so GitHub Pages picks
+   up `members.html`, `js/api.js` (nav link), `style.css`, and `admin.html`.
+3. **Add members** — in `admin.html` → **Members**, one row per singer:
+   `ChoirNumber`, `Name`, `Status` (Current / Past), `Address`, `Phone`, `Email`,
+   `PhotoUrl` (pasted image link), `HideAddress` / `HidePhone` / `HideEmail`
+   (No / Yes), `Index`.
+
+- **Status "Past"** hides the member on the page unless the viewer ticks
+  **"Show past members"** (default off; the choice is remembered per browser).
+- **`Email`** must match the singer's login email for them to manage their own
+  Hide flags from the Members page. Hidden fields are removed from the API for
+  everyone except that singer viewing their own card; the admin kiosk always sees
+  everything.
+
 ## Single sign-on
 
 Both apps are seeded with `sso_enabled = 1`, so launching either from My Apps Hub
@@ -165,8 +185,7 @@ ORDER BY access_date;
 
 ## Planned features (not in this build)
 
-- **Member List** — `cc_members` (name, address, phone, email, photo URL, and
-  `hide_address` / `hide_phone` / `hide_email` flags). Admin maintains the rows; a
-  singer whose login email matches their row toggles their own hide flags.
+- **Configurable nav** — a `cc_nav_items` table so the top nav is admin-editable
+  instead of the fixed `NAV_ITEMS` list in `js/api.js`.
 
 See `ROADMAP.md` for details.

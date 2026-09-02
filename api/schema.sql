@@ -142,6 +142,30 @@ CREATE TABLE IF NOT EXISTS cc_schedule (
   KEY ix_schedule_choir (choir_number, event_date)
 ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ---------- SCHEMA CHANGE: Member List ----------
+-- Run once. Per-choir roster. status is 'Current' or 'Past' -- the member
+-- page hides Past members unless the viewer ticks "Show past members"
+-- (default off). Each singer can hide their own address / phone / email from
+-- other members (hide_* flags); those fields are stripped from the API
+-- response for everyone except that singer viewing their own row (matched by
+-- the email they log in with). The admin kiosk always sees everything.
+
+CREATE TABLE IF NOT EXISTS cc_members (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  choir_number  INT NOT NULL,
+  name          VARCHAR(200) NOT NULL,
+  status        VARCHAR(20) NOT NULL DEFAULT 'Current',
+  address       VARCHAR(500) NULL,
+  phone         VARCHAR(40) NULL,
+  email         VARCHAR(255) NULL,
+  photo_url     VARCHAR(500) NULL,
+  hide_address  TINYINT(1) NOT NULL DEFAULT 0,
+  hide_phone    TINYINT(1) NOT NULL DEFAULT 0,
+  hide_email    TINYINT(1) NOT NULL DEFAULT 0,
+  idx           INT NOT NULL DEFAULT 0,
+  KEY ix_members_choir (choir_number, status)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 -- BOOTSTRAP (run once, after you've signed up through My Apps Hub):
 --

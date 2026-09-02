@@ -182,10 +182,17 @@ $DATA_TABLES = [
     'Title' => 'title', 'Location' => 'location', 'MapUrl' => 'map_url',
     'Instructions' => 'instructions', 'Notes' => 'notes', 'Index' => 'idx',
   ]],
+  'Members' => ['table' => 'cc_members', 'columns' => [
+    'ChoirNumber' => 'choir_number', 'Name' => 'name', 'Status' => 'status',
+    'Address' => 'address', 'Phone' => 'phone', 'Email' => 'email', 'PhotoUrl' => 'photo_url',
+    'HideAddress' => 'hide_address', 'HidePhone' => 'hide_phone', 'HideEmail' => 'hide_email',
+    'Index' => 'idx',
+  ]],
 ];
 
 // Columns that must round-trip as JSON numbers, not strings.
-$NUMERIC_COLUMNS = ['ChoirNumber', 'ProgramNumber', 'SongNumber', 'TrackSequence', 'Sequence', 'SlotsNeeded', 'Index'];
+$NUMERIC_COLUMNS = ['ChoirNumber', 'ProgramNumber', 'SongNumber', 'TrackSequence', 'Sequence',
+  'SlotsNeeded', 'HideAddress', 'HidePhone', 'HideEmail', 'Index'];
 
 // Columns backed by a real SQL DATE column: MySQL rejects '' for a DATE, so a
 // blank date field is stored as NULL instead.
@@ -345,6 +352,79 @@ function choirSchedule(int $choirNumber): array {
   }
   $stmt->close();
   return $out;
+}
+
+// A choir's member roster. Past members are left out unless $includePast.
+// Each row hides address / phone / email that the member chose to hide --
+// EXCEPT the caller's own row (matched by login email), which comes back in
+// full plus IsMe = true and the raw HideAddress/HidePhone/HideEmail flags so
+// the page can render the privacy toggles.
+function choirMembers(int $choirNumber, string $meEmail, bool $includePast): array {
+  $sql = 'SELECT name, status, address, phone, email, photo_url, hide_address, hide_phone, hide_email
+          FROM cc_members WHERE choir_number = ?';
+  if (!$includePast) {
+    $sql .= " AND status <> 'Past'";
+  }
+  $sql .= ' ORDER BY idx, name, id';
+  $stmt = db()->prepare($sql);
+  $stmt->bind_param('i', $choirNumber);
+  $stmt->execute();
+  $res = $stmt->get_result();
+  $me = strtolower(trim($meEmail));
+  $out = [];
+  while ($row = $res->fetch_assoc()) {
+    $rowEmail = trim((string)($row['email'] ?? ''));
+    $isMe = $me !== '' && strtolower($rowEmail) === $me;
+
+    $address = trim((string)($row['address'] ?? ''));
+    $phone = trim((string)($row['phone'] ?? ''));
+    $showAddress = $isMe || (int)$row['hide_address'] === 0;
+    $showPhone = $isMe || (int)$row['hide_phone'] === 0;
+    $showEmail = $isMe || (int)$row['hide_email'] === 0;
+
+    $shownAddress = $showAddress ? $address : '';
+    $entry = [
+      'Name' => (string)($row['name'] ?? ''),
+      'Status' => (string)($row['status'] ?? ''),
+      'PhotoUrl' => trim((string)($row['photo_url'] ?? '')),
+      'Address' => $shownAddress,
+      'Phone' => $showPhone ? $phone : '',
+      'Email' => $showEmail ? $rowEmail : '',
+      'MapLink' => $shownAddress !== ''
+        ? 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($shownAddress)
+        : null,
+      'IsMe' => $isMe,
+    ];
+    if ($isMe) {
+      $entry['HideAddress'] = (int)$row['hide_address'];
+      $entry['HidePhone'] = (int)$row['hide_phone'];
+      $entry['HideEmail'] = (int)$row['hide_email'];
+    }
+    $out[] = $entry;
+  }
+  $stmt->close();
+  return $out;
+}
+
+// A member updates the hide_* flags on their own row (the one whose email
+// matches their login) for one choir. Nothing else is touched.
+function updateMyPrivacy(int $choir, string $meEmail, int $hideAddress, int $hidePhone, int $hideEmail): array {
+  if (trim($meEmail) === '') {
+    return ['ok' => false, 'reason' => 'not-found'];
+  }
+  $stmt = db()->prepare(
+    'UPDATE cc_members SET hide_address = ?, hide_phone = ?, hide_email = ?
+     WHERE choir_number = ? AND email = ?'
+  );
+  $ha = $hideAddress ? 1 : 0;
+  $hp = $hidePhone ? 1 : 0;
+  $he = $hideEmail ? 1 : 0;
+  $stmt->bind_param('iiiis', $ha, $hp, $he, $choir, $meEmail);
+  $stmt->execute();
+  $stmt->close();
+  // No row for this email is a harmless no-op -- the page re-fetches and just
+  // won't show the toggles if the caller isn't on the roster.
+  return ['ok' => true];
 }
 
 // One program's songs + tracks. Tracks are grouped into one entry per
@@ -560,6 +640,14 @@ switch ($action) {
     respond(choirSchedule($choir));
   }
 
+  case 'members': {
+    $user = requireMember();
+    $choir = (int)($_GET['choir'] ?? 0);
+    requireChoirAccess($user, $choir);
+    $includePast = ($_GET['includePast'] ?? '') === '1';
+    respond(choirMembers($choir, $user['username'], $includePast));
+  }
+
   case 'program': {
     $user = requireMember();
     $choir = (int)($_GET['choir'] ?? 0);
@@ -628,6 +716,21 @@ switch ($action) {
       trim((string)($body['date'] ?? '')),
       trim((string)($body['taskName'] ?? '')),
       $user['username']
+    ));
+  }
+
+  // -- Member List: a singer hides/shows their own contact fields --
+
+  case 'patchMyPrivacy': {
+    $user = requireMember();
+    $choir = (int)($body['choir'] ?? 0);
+    requireChoirAccess($user, $choir);
+    respond(updateMyPrivacy(
+      $choir,
+      $user['username'],
+      (int)($body['hideAddress'] ?? 0),
+      (int)($body['hidePhone'] ?? 0),
+      (int)($body['hideEmail'] ?? 0)
     ));
   }
 
