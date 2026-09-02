@@ -10,8 +10,9 @@ carries a choir number, and `cc_choir_users` maps an apps-hub email to the choir
 it may see. A singer in more than one choir picks the active choir at the top of
 the app.
 
-See [SETUP.md](SETUP.md) for deployment and [STACK.md](STACK.md) for how it fits
-together.
+See [SETUP.md](SETUP.md) for deployment, [STACK.md](STACK.md) for how it fits
+together, and [ROADMAP.md](ROADMAP.md) for what's shipped and what's planned
+(Volunteer sign-ups is next).
 
 ## Files
 

@@ -68,8 +68,6 @@ Every successful member action also upserts a row into the shared
 
 ## Planned (not yet built)
 
-- **Schedule** — `cc_schedule`, sorted newest-first including past events, with a
-  Google Maps link per location.
-- **Member List** — `cc_members`, contact cards with Call/Text/Email + a maps link
-  for the address; each singer can hide their own Address / Phone / Email when
-  their login email matches their row.
+See `ROADMAP.md` for the full plan. Next up: **Volunteer sign-ups** (admin posts
+volunteer needs per choir; members claim slots). Then **Schedule** and
+**Member List**.

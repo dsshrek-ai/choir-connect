@@ -286,12 +286,12 @@ function choirPrograms(int $choirNumber): array {
   return $out;
 }
 
-// One program's songs + tracks. Tracks are grouped into one entry per song
-// TITLE (case-insensitive), so the same song entered as several rows -- one
-// per part -- shows up once in the song list. Rows with a blank title fall
-// back to grouping by song_number. Each track gets a real Url built from the
-// choir's folder_slug + the track's song_folder + filename (null if
-// SONG_FILES_BASE_URL isn't configured).
+// One program's songs + tracks. Tracks are grouped into one entry per
+// song_number (enter every part of a song with the same Song Number in the
+// admin). SongTitle is the first non-blank title on any of that song's rows,
+// or "Song N". Each track gets a real Url built from the choir's folder_slug
+// + the track's song_folder + filename (null if SONG_FILES_BASE_URL isn't
+// configured).
 function programDetail(int $choirNumber, int $programNumber): array {
   $pstmt = db()->prepare('SELECT name FROM cc_programs WHERE choir_number = ? AND program_number = ?');
   $pstmt->bind_param('ii', $choirNumber, $programNumber);
@@ -321,21 +321,21 @@ function programDetail(int $choirNumber, int $programNumber): array {
   $tstmt->execute();
   $res = $tstmt->get_result();
 
-  $groups = [];      // song key => index into $ordered
+  $songs = [];       // song_number => index into $ordered
   $ordered = [];
   while ($row = $res->fetch_assoc()) {
     $songNo = (int)$row['song_number'];
     $title = trim((string)($row['song_title'] ?? ''));
-    // One entry per song title; blank titles group by their song number.
-    $key = $title !== '' ? mb_strtolower($title) : ('#' . $songNo);
-    if (!array_key_exists($key, $groups)) {
-      $groups[$key] = count($ordered);
+    if (!array_key_exists($songNo, $songs)) {
+      $songs[$songNo] = count($ordered);
       $ordered[] = [
-        'SongKey' => $key,
         'SongNumber' => $songNo,
         'SongTitle' => $title !== '' ? $title : ('Song ' . $songNo),
         'Tracks' => [],
       ];
+    } elseif ($title !== '' && $ordered[$songs[$songNo]]['SongTitle'] === ('Song ' . $songNo)) {
+      // First row for this song had no title; use one from a later row.
+      $ordered[$songs[$songNo]]['SongTitle'] = $title;
     }
     $songFolder = trim((string)($row['song_folder'] ?? ''));
     $filename = trim((string)($row['filename'] ?? ''));
@@ -343,7 +343,7 @@ function programDetail(int $choirNumber, int $programNumber): array {
     if ($base !== '' && $folderSlug !== '' && $songFolder !== '' && $filename !== '') {
       $url = $base . '/' . rawurlencode($folderSlug) . '/Songs/' . rawurlencode($songFolder) . '/' . rawurlencode($filename);
     }
-    $ordered[$groups[$key]]['Tracks'][] = [
+    $ordered[$songs[$songNo]]['Tracks'][] = [
       'TrackName' => (string)($row['track_name'] ?? ''),
       'ShortDescription' => (string)($row['short_description'] ?? ''),
       'TrackSequence' => (int)$row['track_sequence'],
@@ -389,22 +389,22 @@ switch ($action) {
     respond(programDetail($choir, $program));
   }
 
-  // One song within a program: { ProgramName, Song: { SongKey, SongNumber,
-  // SongTitle, Tracks: [...] } }. Reuses programDetail() and picks the one
-  // song by its SongKey (the case-insensitive title, or "#<number>").
+  // One song within a program: { ProgramName, Song: { SongNumber, SongTitle,
+  // Tracks: [...] } }. Reuses programDetail() and picks out the one song by
+  // its Song Number.
   case 'song': {
     $user = requireMember();
     $choir = (int)($_GET['choir'] ?? 0);
     $program = (int)($_GET['program'] ?? 0);
-    $songKey = trim((string)($_GET['song'] ?? ''));
+    $song = (int)($_GET['song'] ?? 0);
     requireChoirAccess($user, $choir);
-    if ($program <= 0 || $songKey === '') {
-      fail('Missing program or song', 400);
+    if ($program <= 0 || $song <= 0) {
+      fail('Missing program or song number', 400);
     }
     $detail = programDetail($choir, $program);
     $match = null;
     foreach ($detail['Songs'] as $s) {
-      if ($s['SongKey'] === $songKey) { $match = $s; break; }
+      if ((int)$s['SongNumber'] === $song) { $match = $s; break; }
     }
     if ($match === null) {
       fail('Song not found', 404);
