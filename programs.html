@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rehearsal Tracks | Choir Connect</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <h1>Choir Connect</h1>
+  <nav class="site-nav" id="site-nav"></nav>
+  <div id="choir-picker" class="choir-picker"></div>
+</header>
+<main id="main-content">
+  <h2>Rehearsal Tracks</h2>
+  <p class="song-part-desc">Pick a program to see its songs and part tracks. The most recent program is first.</p>
+  <div id="content">Loading programs&hellip;</div>
+</main>
+<footer class="site-footer">Choir Connect</footer>
+<script src="js/api.js"></script>
+<script>
+  (async () => {
+    const el = document.getElementById('content');
+    try {
+      await captureSsoEmail();
+      await ensureActiveChoir();
+      const programs = await fetchChoirData('programs');
+      if (!Array.isArray(programs) || programs.length === 0) {
+        el.innerHTML = `<p class="placeholder-note">No programs have been added for this choir yet.</p>`;
+        return;
+      }
+      el.innerHTML = `
+        <ul class="program-list">
+          ${programs.map(p => `
+            <li>
+              <a href="program.html?program=${encodeURIComponent(p.ProgramNumber)}">
+                ${escapeHtml(p.Name || ('Program ' + p.ProgramNumber))}
+              </a>
+            </li>
+          `).join('')}
+        </ul>
+      `;
+    } catch (e) {
+      handleFetchError(el, e);
+    }
+  })();
+</script>
+</body>
+</html>

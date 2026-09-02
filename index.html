@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome | Choir Connect</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <h1>Choir Connect</h1>
+  <nav class="site-nav" id="site-nav"></nav>
+  <div id="choir-picker" class="choir-picker"></div>
+</header>
+<main id="main-content">
+  <h2>Welcome!</h2>
+  <div id="content">Loading&hellip;</div>
+</main>
+<footer class="site-footer">Choir Connect</footer>
+<script src="js/api.js"></script>
+<script>
+  // My Apps Hub launches this app at index.html with a ?token=... SSO handoff
+  // -- the shared auto-bootstrap in js/api.js captures it before this runs.
+  (async () => {
+    const el = document.getElementById('content');
+    try {
+      await captureSsoEmail();
+      const { choirs, active } = await ensureActiveChoir();
+      const current = choirs.find(c => c.ChoirNumber === active);
+      el.innerHTML = `
+        <div class="card">
+          <p>You're viewing <strong>${escapeHtml(current ? current.Name : 'your choir')}</strong>.</p>
+          <p><a class="btn" href="programs.html">Open Rehearsal Tracks</a></p>
+          ${choirs.length > 1 ? `<p class="song-part-desc">You're in ${choirs.length} choirs — switch between them with the picker at the top.</p>` : ''}
+        </div>
+      `;
+    } catch (e) {
+      handleFetchError(el, e);
+    }
+  })();
+</script>
+</body>
+</html>

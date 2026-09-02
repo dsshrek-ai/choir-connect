@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin | Choir Connect</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .admin-table-wrap { overflow-x: auto; margin-bottom: 1.5rem; }
+  table.admin-table { border-collapse: collapse; width: 100%; }
+  table.admin-table th, table.admin-table td {
+    border: 1px solid var(--color-border);
+    padding: 0.4rem;
+    vertical-align: top;
+  }
+  table.admin-table th { background: var(--color-pinned-bg); text-align: left; }
+  table.admin-table input[type="text"], table.admin-table input[type="number"] {
+    width: 100%;
+    max-width: none;
+    min-width: 7rem;
+    font-size: 0.95rem;
+    padding: 0.3rem;
+    box-sizing: border-box;
+  }
+  table.admin-table input[type="number"] { min-width: 4.5rem; }
+  table.admin-table td:last-child { white-space: nowrap; }
+  table.admin-table .btn { font-size: 0.9rem; padding: 0.4rem 0.7rem; margin: 0.1rem; }
+  .hint { font-size: 0.9rem; color: var(--color-primary-dark); margin: 0.25rem 0 1rem; }
+</style>
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <h1>Choir Connect &mdash; Admin</h1>
+</header>
+<main id="main-content">
+  <div id="login-screen" class="card">
+    <h2>Log In</h2>
+    <p id="auth-error" class="placeholder-note" style="display:none;">Incorrect email or password.</p>
+    <label for="login-email">Email</label>
+    <input type="email" id="login-email" autocomplete="username">
+    <label for="login-pw">Password</label>
+    <input type="password" id="login-pw" autocomplete="current-password">
+    <p><button id="login-btn" class="btn">Log In</button></p>
+    <p class="placeholder-note">Same login as My Apps Hub. Not signed up yet? Sign up there first, then ask to be granted the "Choir Connect Admin" app.</p>
+  </div>
+
+  <div id="panel" style="display:none;">
+    <p><button id="logout-btn" class="btn">Log Out</button></p>
+    <label for="table-select">Table</label>
+    <select id="table-select"></select>
+    <p class="hint" id="table-hint"></p>
+    <div id="status" class="placeholder-note" style="display:none;"></div>
+    <div id="table-container"></div>
+  </div>
+</main>
+<footer class="site-footer">Choir Connect &mdash; admin maintenance panel</footer>
+<script src="js/api.js"></script>
+<script>
+  const TABLES = {
+    Choirs: ['ChoirNumber', 'Name', 'FolderSlug', 'Index'],
+    Programs: ['ChoirNumber', 'ProgramNumber', 'Name', 'Sequence', 'Index'],
+    RehearsalTracks: ['ChoirNumber', 'ProgramNumber', 'SongNumber', 'SongTitle', 'SongFolder', 'TrackSequence', 'ShortDescription', 'TrackName', 'FileName', 'Index'],
+    ChoirUsers: ['ChoirNumber', 'UserEmail'],
+  };
+  const TABLE_HINTS = {
+    Choirs: 'One row per choir. FolderSlug is the folder name under the files root that holds this choir’s Songs/ folder (e.g. "DeciBelles"). Index sets the order in the choir picker.',
+    Programs: 'A program is a concert / season / set list. Sequence controls order — the highest Sequence shows first ("most recent program on top").',
+    RehearsalTracks: 'One row per audio file. Tracks group by SongNumber. SongFolder + FileName locate the file: <FilesRoot>/<choir FolderSlug>/Songs/<SongFolder>/<FileName>. TrackSequence orders tracks within a song.',
+    ChoirUsers: 'Assign apps-hub users to choirs. UserEmail must exactly match the email they sign in with. A person also needs the "Choir Connect" app granted in My Apps Hub to open the app at all.',
+  };
+  const NUMBER_COLUMNS = new Set(['ChoirNumber', 'ProgramNumber', 'SongNumber', 'Sequence', 'TrackSequence', 'Index']);
+
+  const loginScreen = document.getElementById('login-screen');
+  const panel = document.getElementById('panel');
+  const authError = document.getElementById('auth-error');
+  const tableSelect = document.getElementById('table-select');
+  const tableHint = document.getElementById('table-hint');
+  const tableContainer = document.getElementById('table-container');
+  const statusEl = document.getElementById('status');
+
+  function showStatus(message) {
+    statusEl.textContent = message;
+    statusEl.style.display = '';
+  }
+
+  // Session-scoped, not localStorage: this panel edits real data and may run
+  // on a shared computer, so the login clears itself when the tab closes.
+  const AUTH_KEY = 'ccAdminAuth';
+  let auth = null; // { token, displayName }
+  function loadAuth() { try { return JSON.parse(sessionStorage.getItem(AUTH_KEY)); } catch { return null; } }
+  function saveAuth(a) { sessionStorage.setItem(AUTH_KEY, JSON.stringify(a)); }
+  function clearAuth() { sessionStorage.removeItem(AUTH_KEY); }
+
+  function authHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    if (auth && auth.token) headers['Authorization'] = `Bearer ${auth.token}`;
+    return headers;
+  }
+
+  async function callAdmin(action, payload) {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify({ action, ...(payload || {}) }),
+    });
+    return res.json();
+  }
+
+  async function checkAccess() {
+    try {
+      const result = await callAdmin('checkAccess');
+      return !!result.ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function showLogin(message) {
+    clearAuth();
+    auth = null;
+    panel.style.display = 'none';
+    loginScreen.style.display = '';
+    authError.style.display = message ? '' : 'none';
+    if (message) authError.textContent = message;
+  }
+
+  function showPanel() {
+    loginScreen.style.display = 'none';
+    panel.style.display = '';
+    if (!tableSelect.options.length) {
+      tableSelect.innerHTML = Object.keys(TABLES).map(t => `<option value="${t}">${t}</option>`).join('');
+      tableSelect.addEventListener('change', () => loadTable(tableSelect.value));
+      loadTable(tableSelect.value);
+    }
+  }
+
+  async function attemptLogin() {
+    const username = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-pw').value;
+    authError.style.display = 'none';
+    if (!username || !password) return;
+    try {
+      const data = await callAdmin('login', { username, password });
+      if (!data.token) {
+        authError.textContent = data.error || 'Incorrect email or password.';
+        authError.style.display = '';
+        return;
+      }
+      auth = { token: data.token, displayName: data.displayName || username };
+      saveAuth(auth);
+      if (await checkAccess()) {
+        showPanel();
+      } else {
+        showLogin("You're logged in, but not authorized for this admin panel. Ask to be granted the \"Choir Connect Admin\" app.");
+      }
+    } catch (e) {
+      authError.textContent = 'Something went wrong logging in. Please try again.';
+      authError.style.display = '';
+    }
+  }
+
+  document.getElementById('login-btn').addEventListener('click', attemptLogin);
+  document.getElementById('login-pw').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') attemptLogin(); });
+
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    try { await callAdmin('logout', { token: auth.token }); } catch (e) {}
+    showLogin();
+  });
+
+  function fieldInput(col, value) {
+    const safeVal = escapeHtml(value ?? '');
+    if (NUMBER_COLUMNS.has(col)) {
+      return `<input type="number" data-col="${col}" value="${escapeHtml(value ?? '0')}">`;
+    }
+    return `<input type="text" data-col="${col}" value="${safeVal}">`;
+  }
+
+  function readRow(tr, columns) {
+    const values = {};
+    columns.forEach(col => {
+      const el = tr.querySelector(`[data-col="${col}"]`);
+      values[col] = el.value;
+    });
+    return values;
+  }
+
+  async function loadTable(name) {
+    tableHint.textContent = TABLE_HINTS[name] || '';
+    tableContainer.innerHTML = 'Loading…';
+    let result;
+    try {
+      result = await callAdmin('adminList', { sheet: name });
+    } catch (e) {
+      tableContainer.innerHTML = `<p class="placeholder-note">Couldn't load ${escapeHtml(name)}. Please try again.</p>`;
+      return;
+    }
+    if (!result.ok) {
+      if (/session|authoriz/i.test(result.error || '')) {
+        showLogin('Your saved login stopped working. Please log in again.');
+      } else {
+        tableContainer.innerHTML = `<p class="placeholder-note">Not authorized.</p>`;
+      }
+      return;
+    }
+    renderTable(name, result.rows);
+  }
+
+  function renderTable(name, rows) {
+    const columns = TABLES[name];
+    const headHtml = columns.map(c => `<th scope="col">${c}</th>`).join('') + '<th scope="col">Actions</th>';
+    const bodyHtml = rows.map(r => `
+      <tr data-row="${r._row}">
+        ${columns.map(c => `<td>${fieldInput(c, r[c])}</td>`).join('')}
+        <td>
+          <button class="btn" data-action="save">Save</button>
+          <button class="btn" data-action="delete">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+    const addRowHtml = `
+      <tr id="add-row">
+        ${columns.map(c => `<td>${fieldInput(c, '')}</td>`).join('')}
+        <td><button class="btn" data-action="add">Add</button></td>
+      </tr>
+    `;
+    tableContainer.innerHTML = `
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead><tr>${headHtml}</tr></thead>
+          <tbody>${bodyHtml}${addRowHtml}</tbody>
+        </table>
+      </div>
+    `;
+    tableContainer.querySelectorAll('button[data-action]').forEach(button => {
+      button.addEventListener('click', () => handleAction(name, columns, button));
+    });
+  }
+
+  async function handleAction(name, columns, button) {
+    const action = button.dataset.action;
+    const tr = button.closest('tr');
+
+    if (action === 'add') {
+      const row = readRow(tr, columns);
+      button.disabled = true;
+      const result = await callAdmin('adminAdd', { sheet: name, row }).catch(() => ({ ok: false }));
+      if (result.ok) {
+        loadTable(name);
+      } else {
+        showStatus('Could not add that row. Please try again.');
+        button.disabled = false;
+      }
+      return;
+    }
+
+    const rowNumber = Number(tr.dataset.row);
+
+    if (action === 'save') {
+      const values = readRow(tr, columns);
+      button.disabled = true;
+      const result = await callAdmin('adminUpdate', { sheet: name, row: rowNumber, values }).catch(() => ({ ok: false }));
+      showStatus(result.ok ? 'Saved.' : 'Could not save that row. Please try again.');
+      button.disabled = false;
+      return;
+    }
+
+    if (action === 'delete') {
+      if (!confirm('Delete this row? This cannot be undone.')) return;
+      button.disabled = true;
+      const result = await callAdmin('adminDelete', { sheet: name, row: rowNumber }).catch(() => ({ ok: false }));
+      if (result.ok) {
+        loadTable(name);
+      } else {
+        showStatus('Could not delete that row. Please try again.');
+        button.disabled = false;
+      }
+    }
+  }
+
+  (async () => {
+    // Single sign-on: My Apps Hub launches this app with ?token=... when the
+    // visitor is already logged in there, so this skips its own login screen.
+    const ssoToken = new URLSearchParams(window.location.search).get('token');
+    if (ssoToken) {
+      auth = { token: ssoToken, displayName: '' };
+      saveAuth(auth);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      auth = loadAuth();
+    }
+    if (!auth) return;
+    if (await checkAccess()) {
+      showPanel();
+    } else {
+      showLogin("You're logged in, but not authorized for this admin panel. Ask to be granted the \"Choir Connect Admin\" app.");
+    }
+  })();
+</script>
+</body>
+</html>
