@@ -382,7 +382,8 @@ function choirMembers(int $choirNumber, string $meEmail, bool $includePast): arr
   if (!$includePast) {
     $sql .= " AND status <> 'Past'";
   }
-  $sql .= ' ORDER BY idx, name, id';
+  // Sorted by name (a single field, so effectively by first name).
+  $sql .= ' ORDER BY name, id';
   $stmt = db()->prepare($sql);
   $stmt->bind_param('i', $choirNumber);
   $stmt->execute();

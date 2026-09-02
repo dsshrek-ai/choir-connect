@@ -402,14 +402,16 @@ form label {
   margin: 0.75rem 0;
 }
 
-.member-photo-empty {
+/* No-photo placeholder: initials on a coloured circle */
+.member-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-pinned-bg);
-  color: var(--color-primary-dark);
-  font-size: 0.8rem;
-  text-align: center;
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: bold;
+  font-size: 1.4rem;
+  letter-spacing: 0.02em;
 }
 
 .member-me .btn { font-size: 1rem; padding: 0.5rem 1rem; }

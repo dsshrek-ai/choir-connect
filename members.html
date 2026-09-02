@@ -36,6 +36,21 @@
     statusEl.style.display = '';
   }
 
+  // Initials for the no-photo placeholder avatar (first + last word).
+  function initials(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    const a = parts[0][0] || '';
+    const b = parts.length > 1 ? (parts[parts.length - 1][0] || '') : '';
+    return (a + b).toUpperCase();
+  }
+
+  function avatarHtml(m) {
+    return m.PhotoUrl
+      ? `<img class="member-photo" src="${escapeHtml(m.PhotoUrl)}" alt="">`
+      : `<span class="member-photo member-avatar" aria-hidden="true">${escapeHtml(initials(m.Name))}</span>`;
+  }
+
   function otherCard(m) {
     const past = m.Status && m.Status.toLowerCase() === 'past';
     const addressHtml = m.Address
@@ -45,7 +60,7 @@
       : '';
     return `
       <div class="card member-card${past ? ' member-past' : ''}">
-        ${m.PhotoUrl ? `<img class="member-photo" src="${escapeHtml(m.PhotoUrl)}" alt="">` : ''}
+        ${avatarHtml(m)}
         <div class="member-body">
           <h3>${escapeHtml(m.Name || 'Member')}${past ? ' <span class="badge">Past</span>' : ''}</h3>
           ${addressHtml}
@@ -63,7 +78,7 @@
           <p class="member-line song-part-desc">This is how other members see you. Email stays your sign-in address.</p>
 
           <div class="member-photo-edit">
-            ${m.PhotoUrl ? `<img class="member-photo" src="${escapeHtml(m.PhotoUrl)}" alt="">` : `<span class="member-photo member-photo-empty">No photo</span>`}
+            ${avatarHtml(m)}
             <label class="btn" style="cursor:pointer;">
               ${m.PhotoUrl ? 'Change photo' : 'Add photo'}
               <input type="file" accept="image/jpeg,image/png,image/webp" data-photo hidden>

@@ -17,9 +17,10 @@ Status of the app and what's planned next. See `STACK.md` for architecture and
   past events kept (dimmed, under a "Past" divider). Location links to Google
   Maps (a pasted map URL wins, else a maps search on the location text).
   API: `schedule`; table `cc_schedule`; admin editor `Schedule`.
-- **Member List** — `members.html`: per-choir roster with photo, contact
-  buttons (Call / Text / Email), and a maps link for the address. Each member
-  has a **Current / Past** status; the page hides Past members unless the
+- **Member List** — `members.html`: per-choir roster, **sorted by name**, with a
+  photo (or an initials avatar) shown to everyone, contact buttons (Call / Text
+  / Email), and a maps link for the address. Each member has a
+  **Current / Past** status; the page hides Past members unless the
   viewer ticks **"Show past members"** (default off, choice remembered). A
   singer whose login email matches their row can **maintain their own entry** —
   name, address, phone, photo (uploaded to `PHOTO_UPLOAD_DIR`, one per person,
