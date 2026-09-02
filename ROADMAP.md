@@ -73,22 +73,34 @@ CREATE TABLE IF NOT EXISTS cc_volunteer_signups (
   `DATE` column. (The core build dropped this; Volunteer and Schedule both need
   it.)
 - `volunteerStatus` (GET, `?choir=N`, `requireMember` + `requireChoirAccess`) —
-  the choir's tasks each with `SlotsFilled` (count of matching signups):
-  `[{ Date, TaskName, SlotsNeeded, SlotsFilled }]`.
+  the choir's tasks each with `SlotsFilled` (count of matching signups) and
+  `YouSignedUp` (bool — is there a signup for this task whose `email` equals the
+  caller's login email):
+  `[{ Date, TaskName, SlotsNeeded, SlotsFilled, YouSignedUp }]`.
 - `claimSlot` (POST, `{ choir, date, taskName, volunteerName, phoneNumber, email }`,
   `requireMember` + `requireChoirAccess`) — `GET_LOCK('cc_claim_slot', 10)`,
   recompute the task's filled count, reject if full, `INSERT` the signup with
   `choir_number`, `RELEASE_LOCK`. Returns `{ ok }` or `{ ok:false, reason }`
   (`locked` / `not-found` / `full`). Same named-lock pattern as the member app's
   `claimSlot`.
+- `releaseSlot` (POST, `{ choir, date, taskName }`, `requireMember` +
+  `requireChoirAccess`) — `DELETE` the caller's own signup for that task
+  (`choir_number` + `entry_date` + `task_name` + `email = $user['username']`).
+  Returns `{ ok }`. Members can cancel their own signup; they can't touch
+  anyone else's.
+
+No notification email in v1 — a signup is just recorded. (Revisit a per-choir
+coordinator email later if it's wanted.)
 
 **Front end:**
 
 - New `volunteer.html` — `ensureActiveChoir()` → `fetchChoirData('volunteerStatus')`;
-  list each task with "X of Y filled" and, when slots remain, a small form (name +
-  phone; email pre-filled from `getSavedEmail()`). Submit →
-  `postAction('claimSlot', { choir: getActiveChoir(), ... })`, then refresh the
-  list. Model the layout on the member app's `volunteer.html`.
+  list each task with "X of Y filled". If `YouSignedUp` → show "You're signed
+  up" + a **Cancel** button (`postAction('releaseSlot', { choir, date, taskName })`).
+  Otherwise, when slots remain, a small form (name + phone; email pre-filled from
+  `getSavedEmail()`) → `postAction('claimSlot', { choir: getActiveChoir(), ... })`.
+  Refresh the list after either action. Model the layout on the member app's
+  `volunteer.html`.
 - `js/api.js` — add `{ Label: 'Volunteer', PageFile: 'volunteer.html' }` to
   `NAV_ITEMS`.
 - `admin.html` — add `VolunteerTasks` and `VolunteerSignups` to `TABLES`; give
@@ -98,9 +110,8 @@ CREATE TABLE IF NOT EXISTS cc_volunteer_signups (
 **Deploy:** run the two `CREATE TABLE`s in phpMyAdmin; re-upload `api/api.php`,
 `admin.html`, `js/api.js`, and the new `volunteer.html`.
 
-**Open questions:** does a signup need a per-choir "which section leader gets
-notified" email (the member app sends one), or is a plain recorded signup enough
-for v1? Should members be able to cancel their own signup?
+**Settled:** no notification email for v1; members can cancel their own signup
+(`releaseSlot`).
 
 ### 2. Schedule
 
