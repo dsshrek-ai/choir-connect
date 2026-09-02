@@ -121,6 +121,27 @@ CREATE TABLE IF NOT EXISTS cc_volunteer_signups (
   KEY ix_vsignups (choir_number, task_name, entry_date)
 ) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ---------- SCHEMA CHANGE: Schedule ----------
+-- Run once. Per-choir rehearsal / event schedule. time_text is free text
+-- ("7:00 PM", "Call 6:30"); the member page sorts by date descending and
+-- shows past events too, so same-day ordering is by idx. location becomes a
+-- Google Maps link on the member page (map_url wins if the admin pasted one,
+-- otherwise a maps search on the location text).
+
+CREATE TABLE IF NOT EXISTS cc_schedule (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  choir_number  INT NOT NULL,
+  event_date    DATE NULL,
+  time_text     VARCHAR(60) NULL,
+  title         VARCHAR(200) NULL,
+  location      VARCHAR(255) NULL,
+  map_url       VARCHAR(500) NULL,
+  instructions  TEXT NULL,
+  notes         TEXT NULL,
+  idx           INT NOT NULL DEFAULT 0,
+  KEY ix_schedule_choir (choir_number, event_date)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 -- BOOTSTRAP (run once, after you've signed up through My Apps Hub):
 --

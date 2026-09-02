@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schedule | Choir Connect</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <h1>Choir Connect</h1>
+  <nav class="site-nav" id="site-nav"></nav>
+  <div id="choir-picker" class="choir-picker"></div>
+</header>
+<main id="main-content">
+  <h2>Schedule</h2>
+  <p class="song-part-desc">Rehearsals and events, newest first. Past events stay on the list.</p>
+  <div id="content">Loading schedule&hellip;</div>
+</main>
+<footer class="site-footer">Choir Connect</footer>
+<script src="js/api.js"></script>
+<script>
+  function fmtDate(d) {
+    if (!d) return '';
+    const parts = String(d).split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return d;
+    const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+    return dt.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  // 'YYYY-MM-DD' -> true if strictly before today (local).
+  function isPast(d) {
+    if (!d) return false;
+    const today = new Date();
+    const t = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return String(d) < t;
+  }
+
+  function entryCard(e) {
+    const past = isPast(e.Date);
+    const when = [fmtDate(e.Date), e.Time].filter(Boolean).join(' · ');
+    const locationHtml = e.Location
+      ? (e.MapLink
+          ? `<a href="${escapeHtml(e.MapLink)}" target="_blank" rel="noopener">${escapeHtml(e.Location)}</a>`
+          : escapeHtml(e.Location))
+      : '';
+    return `
+      <div class="card sched-card${past ? ' sched-past' : ''}">
+        <h3>${escapeHtml(e.Title || 'Event')}</h3>
+        ${when ? `<p class="sched-when">${escapeHtml(when)}</p>` : ''}
+        ${locationHtml ? `<p class="sched-loc">📍 ${locationHtml}</p>` : ''}
+        ${e.Instructions ? `<div class="sched-block"><strong>Entry instructions</strong>${formatText(e.Instructions)}</div>` : ''}
+        ${e.Notes ? `<div class="sched-block">${formatText(e.Notes)}</div>` : ''}
+      </div>
+    `;
+  }
+
+  (async () => {
+    const el = document.getElementById('content');
+    try {
+      await captureSsoEmail();
+      await ensureActiveChoir();
+      const entries = await fetchChoirData('schedule');
+      if (!Array.isArray(entries) || entries.length === 0) {
+        el.innerHTML = `<p class="placeholder-note">Nothing on the schedule for this choir yet.</p>`;
+        return;
+      }
+      let html = '';
+      let dividerDone = false;
+      entries.forEach(e => {
+        if (!dividerDone && isPast(e.Date)) {
+          html += `<p class="sched-divider">Past</p>`;
+          dividerDone = true;
+        }
+        html += entryCard(e);
+      });
+      el.innerHTML = html;
+    } catch (e) {
+      handleFetchError(el, e);
+    }
+  })();
+</script>
+</body>
+</html>

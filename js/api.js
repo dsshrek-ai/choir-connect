@@ -299,6 +299,7 @@ function captureSsoEmail() {
 // later, mirroring the member app's choir_nav_items.
 const NAV_ITEMS = [
   { Label: 'Home', PageFile: 'index.html' },
+  { Label: 'Schedule', PageFile: 'schedule.html' },
   { Label: 'Rehearsal Tracks', PageFile: 'programs.html' },
   { Label: 'Volunteer', PageFile: 'volunteer.html' },
 ];

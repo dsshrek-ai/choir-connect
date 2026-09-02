@@ -129,6 +129,20 @@ deploy, so:
 `Email` on a signup is the member's login email — that's how "Cancel my signup"
 finds their row. No notification email is sent in v1.
 
+## 10. Schedule
+
+The Schedule page (`schedule.html`) shows a choir's rehearsals and events, newest
+first, with past events kept on the list. Added after the Volunteer feature, so:
+
+1. **Database** — run the `cc_schedule` `CREATE TABLE` from `api/schema.sql` (the
+   "SCHEMA CHANGE: Schedule" block) in phpMyAdmin.
+2. **Redeploy** — re-upload `api/api.php`, and push the repo so GitHub Pages picks
+   up `schedule.html`, `js/api.js` (nav link), `style.css`, and `admin.html`.
+3. **Add events** — in `admin.html` → **Schedule**, add a row per event:
+   `ChoirNumber`, `Date`, `Time` (free text like "7:00 PM"), `Title`, `Location`,
+   `MapUrl` (leave blank to auto-link the Location to Google Maps, or paste a
+   specific link), `Instructions`, `Notes`, `Index` (order among same-day events).
+
 ## Single sign-on
 
 Both apps are seeded with `sso_enabled = 1`, so launching either from My Apps Hub
@@ -151,8 +165,8 @@ ORDER BY access_date;
 
 ## Planned features (not in this build)
 
-- **Schedule** — `cc_schedule` (date, time, location + Google Maps link, entry
-  instructions, notes), sorted newest-first including past events.
 - **Member List** — `cc_members` (name, address, phone, email, photo URL, and
   `hide_address` / `hide_phone` / `hide_email` flags). Admin maintains the rows; a
   singer whose login email matches their row toggles their own hide flags.
+
+See `ROADMAP.md` for details.

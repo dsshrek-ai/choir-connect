@@ -13,9 +13,13 @@ Status of the app and what's planned next. See `STACK.md` for architecture and
   signup. No notification email in v1. API: `volunteerStatus` / `claimSlot` /
   `releaseSlot`; tables `cc_volunteer_tasks`, `cc_volunteer_signups`; admin
   editors `VolunteerTasks` / `VolunteerSignups`.
+- **Schedule** — `schedule.html`: per-choir rehearsals / events, newest first,
+  past events kept (dimmed, under a "Past" divider). Location links to Google
+  Maps (a pasted map URL wins, else a maps search on the location text).
+  API: `schedule`; table `cc_schedule`; admin editor `Schedule`.
 - **Admin kiosk** (`admin.html`) — generic editor for Choirs, Programs,
   RehearsalTracks, ChoirUsers (assign users to choirs), VolunteerTasks,
-  VolunteerSignups.
+  VolunteerSignups, Schedule.
 - **Two-layer auth** — My Apps Hub `app_access` grant (`choir-connect` /
   `choir-connect-admin`) + `cc_choir_users` per-choir scoping. Usage logged to
   the shared `app_usage_log`.
@@ -35,15 +39,7 @@ Grouping by number is the model; the fix is consistent data entry.
 
 ## Planned
 
-### 1. Schedule
-
-`cc_schedule (choir_number, event_date, time_text, location, map_url, instructions,
-notes, idx)`. `schedule.html` sorts by date + time **descending, including past
-events**; Location becomes a Google Maps link
-(`https://www.google.com/maps/search/?api=1&query=<encoded>`). Admin registry
-entry `Schedule`; reuses the `$DATE_COLUMNS` handling from the Volunteer work.
-
-### 2. Member List
+### 1. Member List
 
 `cc_members (choir_number, name, address, phone, email, photo_url, hide_address,
 hide_phone, hide_email, sort_order)`. `members.html` renders contact cards with
@@ -52,7 +48,7 @@ maps link for the address. Admin maintains the rows; a singer whose login email
 matches their row gets a small `patchMyPrivacy` action toggling only their three
 `hide_*` flags. Photo = pasted image URL.
 
-### 3. Configurable nav (if the fixed nav becomes limiting)
+### 2. Configurable nav (if the fixed nav becomes limiting)
 
 `cc_nav_items` + a `navItems` action, mirroring the member app's
 `choir_nav_items`, so the top nav is admin-editable instead of the `NAV_ITEMS`

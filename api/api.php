@@ -177,6 +177,11 @@ $DATA_TABLES = [
     'VolunteerName' => 'volunteer_name', 'PhoneNumber' => 'phone_number', 'Email' => 'email',
     'Timestamp' => 'signed_up_at',
   ]],
+  'Schedule' => ['table' => 'cc_schedule', 'columns' => [
+    'ChoirNumber' => 'choir_number', 'Date' => 'event_date', 'Time' => 'time_text',
+    'Title' => 'title', 'Location' => 'location', 'MapUrl' => 'map_url',
+    'Instructions' => 'instructions', 'Notes' => 'notes', 'Index' => 'idx',
+  ]],
 ];
 
 // Columns that must round-trip as JSON numbers, not strings.
@@ -299,6 +304,43 @@ function choirPrograms(int $choirNumber): array {
       'ProgramNumber' => (int)$row['program_number'],
       'Name' => $row['name'],
       'Sequence' => (int)$row['sequence'],
+    ];
+  }
+  $stmt->close();
+  return $out;
+}
+
+// A choir's schedule, newest first, including past events. Location resolves
+// to MapLink: the admin's pasted Map URL if any, else a Google Maps search
+// on the location text, else null.
+// [{ Date, Time, Title, Location, MapLink, Instructions, Notes }]
+function choirSchedule(int $choirNumber): array {
+  $stmt = db()->prepare(
+    'SELECT event_date, time_text, title, location, map_url, instructions, notes
+     FROM cc_schedule WHERE choir_number = ?
+     ORDER BY event_date IS NULL, event_date DESC, idx, id'
+  );
+  $stmt->bind_param('i', $choirNumber);
+  $stmt->execute();
+  $res = $stmt->get_result();
+  $out = [];
+  while ($row = $res->fetch_assoc()) {
+    $location = trim((string)($row['location'] ?? ''));
+    $mapUrl = trim((string)($row['map_url'] ?? ''));
+    $mapLink = null;
+    if ($mapUrl !== '') {
+      $mapLink = $mapUrl;
+    } elseif ($location !== '') {
+      $mapLink = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($location);
+    }
+    $out[] = [
+      'Date' => $row['event_date'] ?? '',
+      'Time' => (string)($row['time_text'] ?? ''),
+      'Title' => (string)($row['title'] ?? ''),
+      'Location' => $location,
+      'MapLink' => $mapLink,
+      'Instructions' => (string)($row['instructions'] ?? ''),
+      'Notes' => (string)($row['notes'] ?? ''),
     ];
   }
   $stmt->close();
@@ -509,6 +551,13 @@ switch ($action) {
     $choir = (int)($_GET['choir'] ?? 0);
     requireChoirAccess($user, $choir);
     respond(choirPrograms($choir));
+  }
+
+  case 'schedule': {
+    $user = requireMember();
+    $choir = (int)($_GET['choir'] ?? 0);
+    requireChoirAccess($user, $choir);
+    respond(choirSchedule($choir));
   }
 
   case 'program': {

@@ -296,6 +296,37 @@ form label {
   margin-top: 0.25rem;
 }
 
+/* Schedule (schedule.html) */
+.sched-divider {
+  margin: 1.5rem 0 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.85rem;
+  color: var(--color-primary-dark);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.25rem;
+}
+
+.sched-card h3 { margin-top: 0; }
+
+.sched-when {
+  font-weight: bold;
+  color: var(--color-primary-dark);
+  margin: 0.25rem 0;
+}
+
+.sched-loc { margin: 0.25rem 0; }
+
+.sched-block {
+  margin-top: 0.75rem;
+  font-size: 0.97rem;
+}
+
+.sched-block strong { display: block; margin-bottom: 0.15rem; }
+
+.sched-past { opacity: 0.6; }
+
 .song-parts {
   display: flex;
   flex-direction: column;
