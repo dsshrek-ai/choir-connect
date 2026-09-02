@@ -300,6 +300,7 @@ function captureSsoEmail() {
 const NAV_ITEMS = [
   { Label: 'Home', PageFile: 'index.html' },
   { Label: 'Rehearsal Tracks', PageFile: 'programs.html' },
+  { Label: 'Volunteer', PageFile: 'volunteer.html' },
 ];
 
 function renderNav() {

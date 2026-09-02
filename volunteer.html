@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Volunteer | Choir Connect</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <h1>Choir Connect</h1>
+  <nav class="site-nav" id="site-nav"></nav>
+  <div id="choir-picker" class="choir-picker"></div>
+</header>
+<main id="main-content">
+  <h2>Volunteer</h2>
+  <p class="song-part-desc">Sign up to help with what your choir needs. You can cancel your own signup any time.</p>
+  <div id="status" class="placeholder-note" style="display:none;"></div>
+  <div id="content">Loading&hellip;</div>
+</main>
+<footer class="site-footer">Choir Connect</footer>
+<script src="js/api.js"></script>
+<script>
+  const contentEl = document.getElementById('content');
+  const statusEl = document.getElementById('status');
+  let tasks = [];
+
+  function showStatus(msg) {
+    if (!msg) { statusEl.style.display = 'none'; return; }
+    statusEl.textContent = msg;
+    statusEl.style.display = '';
+  }
+
+  function fmtDate(d) {
+    if (!d) return '';
+    const parts = String(d).split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return d;
+    const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+    return dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function taskCard(task, i) {
+    const remaining = Math.max(0, task.SlotsNeeded - task.SlotsFilled);
+    const meta = [fmtDate(task.Date), `${task.SlotsFilled} of ${task.SlotsNeeded} filled`]
+      .filter(Boolean).join(' &nbsp;&bull;&nbsp; ');
+    let action;
+    if (task.YouSignedUp) {
+      action = `
+        <p class="vol-signed">&#10003; You're signed up.</p>
+        <button type="button" class="btn" data-act="cancel" data-i="${i}">Cancel my signup</button>
+      `;
+    } else if (remaining <= 0) {
+      action = `<p class="song-part-desc">All slots are filled.</p>`;
+    } else {
+      action = `
+        <div class="vol-form">
+          <label>Your name
+            <input type="text" data-field="name" autocomplete="name">
+          </label>
+          <label>Phone <span class="song-part-desc">(optional)</span>
+            <input type="tel" data-field="phone" autocomplete="tel">
+          </label>
+          <button type="button" class="btn" data-act="signup" data-i="${i}">Sign Up</button>
+        </div>
+      `;
+    }
+    return `
+      <div class="card" data-card="${i}">
+        <h3>${escapeHtml(task.TaskName || 'Volunteer task')}</h3>
+        <p class="vol-meta">${meta}</p>
+        ${action}
+      </div>
+    `;
+  }
+
+  async function render() {
+    tasks = await fetchChoirData('volunteerStatus');
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      contentEl.innerHTML = `<p class="placeholder-note">No volunteer needs have been posted for this choir yet.</p>`;
+      return;
+    }
+    contentEl.innerHTML = tasks.map(taskCard).join('');
+    contentEl.querySelectorAll('button[data-act]').forEach(btn => {
+      btn.addEventListener('click', () => handleAction(btn));
+    });
+  }
+
+  async function handleAction(btn) {
+    const i = Number(btn.dataset.i);
+    const task = tasks[i];
+    if (!task) return;
+    showStatus('');
+    btn.disabled = true;
+
+    try {
+      if (btn.dataset.act === 'cancel') {
+        const res = await postAction('releaseSlot', {
+          choir: getActiveChoir(), date: task.Date, taskName: task.TaskName,
+        });
+        if (!res.ok) { showStatus("Couldn't cancel that just now. Please try again."); btn.disabled = false; return; }
+        await render();
+        return;
+      }
+
+      // signup
+      const card = contentEl.querySelector(`[data-card="${i}"]`);
+      const name = card.querySelector('[data-field="name"]').value.trim();
+      const phone = card.querySelector('[data-field="phone"]').value.trim();
+      if (!name) {
+        showStatus('Please enter your name before signing up.');
+        btn.disabled = false;
+        return;
+      }
+      const res = await postAction('claimSlot', {
+        choir: getActiveChoir(), date: task.Date, taskName: task.TaskName,
+        volunteerName: name, phoneNumber: phone,
+      });
+      if (res.ok) { await render(); return; }
+      if (res.reason === 'full') showStatus('That task just filled up.');
+      else if (res.reason === 'locked') showStatus('Someone else is signing up right now — try again in a moment.');
+      else showStatus("Couldn't sign you up just now. Please try again.");
+      await render();
+    } catch (e) {
+      handleFetchError(contentEl, e);
+    }
+  }
+
+  (async () => {
+    try {
+      await captureSsoEmail();
+      await ensureActiveChoir();
+      await render();
+    } catch (e) {
+      handleFetchError(contentEl, e);
+    }
+  })();
+</script>
+</body>
+</html>

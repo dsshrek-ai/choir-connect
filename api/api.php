@@ -168,10 +168,23 @@ $DATA_TABLES = [
   'ChoirUsers' => ['table' => 'cc_choir_users', 'columns' => [
     'ChoirNumber' => 'choir_number', 'UserEmail' => 'user_email',
   ]],
+  'VolunteerTasks' => ['table' => 'cc_volunteer_tasks', 'columns' => [
+    'ChoirNumber' => 'choir_number', 'Date' => 'entry_date', 'TaskName' => 'task_name',
+    'SlotsNeeded' => 'slots_needed', 'Index' => 'idx',
+  ]],
+  'VolunteerSignups' => ['table' => 'cc_volunteer_signups', 'columns' => [
+    'ChoirNumber' => 'choir_number', 'Date' => 'entry_date', 'TaskName' => 'task_name',
+    'VolunteerName' => 'volunteer_name', 'PhoneNumber' => 'phone_number', 'Email' => 'email',
+    'Timestamp' => 'signed_up_at',
+  ]],
 ];
 
 // Columns that must round-trip as JSON numbers, not strings.
-$NUMERIC_COLUMNS = ['ChoirNumber', 'ProgramNumber', 'SongNumber', 'TrackSequence', 'Sequence', 'Index'];
+$NUMERIC_COLUMNS = ['ChoirNumber', 'ProgramNumber', 'SongNumber', 'TrackSequence', 'Sequence', 'SlotsNeeded', 'Index'];
+
+// Columns backed by a real SQL DATE column: MySQL rejects '' for a DATE, so a
+// blank date field is stored as NULL instead.
+$DATE_COLUMNS = ['Date'];
 
 function tableRowsWithId(string $name): array {
   global $DATA_TABLES;
@@ -188,7 +201,7 @@ function tableRowsWithId(string $name): array {
 }
 
 function adminInsertRow(string $name, array $rowData): int {
-  global $DATA_TABLES, $NUMERIC_COLUMNS;
+  global $DATA_TABLES, $NUMERIC_COLUMNS, $DATE_COLUMNS;
   $spec = $DATA_TABLES[$name];
   $cols = []; $placeholders = []; $types = ''; $values = [];
   foreach ($spec['columns'] as $jsonKey => $dbCol) {
@@ -197,6 +210,9 @@ function adminInsertRow(string $name, array $rowData): int {
     if (in_array($jsonKey, $NUMERIC_COLUMNS, true)) {
       $types .= 'i';
       $values[] = (int)($rowData[$jsonKey] ?? 0);
+    } elseif (in_array($jsonKey, $DATE_COLUMNS, true)) {
+      $types .= 's';
+      $values[] = ($rowData[$jsonKey] ?? '') === '' ? null : (string)$rowData[$jsonKey];
     } else {
       $types .= 's';
       $values[] = (string)($rowData[$jsonKey] ?? '');
@@ -212,7 +228,7 @@ function adminInsertRow(string $name, array $rowData): int {
 }
 
 function adminUpdateRow(string $name, int $id, array $rowData): void {
-  global $DATA_TABLES, $NUMERIC_COLUMNS;
+  global $DATA_TABLES, $NUMERIC_COLUMNS, $DATE_COLUMNS;
   $spec = $DATA_TABLES[$name];
   $sets = []; $types = ''; $values = [];
   foreach ($spec['columns'] as $jsonKey => $dbCol) {
@@ -220,6 +236,9 @@ function adminUpdateRow(string $name, int $id, array $rowData): void {
     if (in_array($jsonKey, $NUMERIC_COLUMNS, true)) {
       $types .= 'i';
       $values[] = (int)($rowData[$jsonKey] ?? 0);
+    } elseif (in_array($jsonKey, $DATE_COLUMNS, true)) {
+      $types .= 's';
+      $values[] = ($rowData[$jsonKey] ?? '') === '' ? null : (string)$rowData[$jsonKey];
     } else {
       $types .= 's';
       $values[] = (string)($rowData[$jsonKey] ?? '');
@@ -356,6 +375,120 @@ function programDetail(int $choirNumber, int $programNumber): array {
   return ['ProgramName' => $program['name'], 'Songs' => $ordered];
 }
 
+// ---- Volunteer sign-ups (per choir) ----
+
+// A choir's volunteer tasks, each with how many slots are filled and whether
+// the current member (by login email) is one of them.
+// [{ Date, TaskName, SlotsNeeded, SlotsFilled, YouSignedUp }]
+function volunteerStatus(int $choirNumber, string $meEmail): array {
+  $stmt = db()->prepare(
+    "SELECT t.entry_date, t.task_name, t.slots_needed,
+            (SELECT COUNT(*) FROM cc_volunteer_signups s
+              WHERE s.choir_number = t.choir_number
+                AND s.task_name = t.task_name
+                AND s.entry_date <=> t.entry_date) AS slots_filled,
+            (SELECT COUNT(*) FROM cc_volunteer_signups s
+              WHERE s.choir_number = t.choir_number
+                AND s.task_name = t.task_name
+                AND s.entry_date <=> t.entry_date
+                AND s.email = ?) AS mine
+     FROM cc_volunteer_tasks t
+     WHERE t.choir_number = ?
+     ORDER BY t.entry_date IS NULL, t.entry_date, t.idx, t.id"
+  );
+  $stmt->bind_param('si', $meEmail, $choirNumber);
+  $stmt->execute();
+  $res = $stmt->get_result();
+  $out = [];
+  while ($row = $res->fetch_assoc()) {
+    $out[] = [
+      'Date' => $row['entry_date'] ?? '',
+      'TaskName' => $row['task_name'],
+      'SlotsNeeded' => (int)$row['slots_needed'],
+      'SlotsFilled' => (int)$row['slots_filled'],
+      'YouSignedUp' => ((int)$row['mine']) > 0,
+    ];
+  }
+  $stmt->close();
+  return $out;
+}
+
+// Claim one slot on a task. Named lock (like the member app's claimSlot) so
+// two people can't take the last slot at once. Idempotent for a member who
+// is already signed up.
+function volunteerClaim(int $choir, string $date, string $task, string $name, string $phone, string $email): array {
+  if ($task === '') {
+    return ['ok' => false, 'reason' => 'not-found'];
+  }
+  $dateParam = $date === '' ? null : $date;
+  $conn = db();
+  $got = $conn->query("SELECT GET_LOCK('cc_claim_slot', 10) AS got")->fetch_assoc();
+  if (!$got || (int)$got['got'] !== 1) {
+    return ['ok' => false, 'reason' => 'locked'];
+  }
+  try {
+    $tstmt = $conn->prepare(
+      'SELECT slots_needed FROM cc_volunteer_tasks
+       WHERE choir_number = ? AND task_name = ? AND entry_date <=> ? LIMIT 1'
+    );
+    $tstmt->bind_param('iss', $choir, $task, $dateParam);
+    $tstmt->execute();
+    $taskRow = $tstmt->get_result()->fetch_assoc();
+    $tstmt->close();
+    if (!$taskRow) {
+      return ['ok' => false, 'reason' => 'not-found'];
+    }
+
+    $cstmt = $conn->prepare(
+      'SELECT
+         COUNT(*) AS filled,
+         SUM(CASE WHEN email = ? THEN 1 ELSE 0 END) AS mine
+       FROM cc_volunteer_signups
+       WHERE choir_number = ? AND task_name = ? AND entry_date <=> ?'
+    );
+    $cstmt->bind_param('siss', $email, $choir, $task, $dateParam);
+    $cstmt->execute();
+    $counts = $cstmt->get_result()->fetch_assoc();
+    $cstmt->close();
+
+    if ($email !== '' && (int)($counts['mine'] ?? 0) > 0) {
+      return ['ok' => true]; // already signed up -- no-op
+    }
+    if ((int)($counts['filled'] ?? 0) >= (int)$taskRow['slots_needed']) {
+      return ['ok' => false, 'reason' => 'full'];
+    }
+
+    $ins = $conn->prepare(
+      'INSERT INTO cc_volunteer_signups
+         (choir_number, entry_date, task_name, volunteer_name, phone_number, email, signed_up_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW())'
+    );
+    $ins->bind_param('isssss', $choir, $dateParam, $task, $name, $phone, $email);
+    $ins->execute();
+    $ins->close();
+    return ['ok' => true];
+  } finally {
+    $conn->query("SELECT RELEASE_LOCK('cc_claim_slot')");
+  }
+}
+
+// Cancel the caller's own signup for a task. Matches on the login email, so a
+// member can only remove their own row.
+function volunteerRelease(int $choir, string $date, string $task, string $meEmail): array {
+  if ($meEmail === '') {
+    return ['ok' => false, 'reason' => 'not-found'];
+  }
+  $dateParam = $date === '' ? null : $date;
+  $stmt = db()->prepare(
+    'DELETE FROM cc_volunteer_signups
+     WHERE choir_number = ? AND task_name = ? AND entry_date <=> ? AND email = ?'
+  );
+  $stmt->bind_param('isss', $choir, $task, $dateParam, $meEmail);
+  $stmt->execute();
+  $stmt->close();
+  return ['ok' => true];
+}
+
 // ---- Router ----
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -410,6 +543,43 @@ switch ($action) {
       fail('Song not found', 404);
     }
     respond(['ProgramName' => $detail['ProgramName'], 'Song' => $match]);
+  }
+
+  // -- Volunteer sign-ups (member) --
+
+  case 'volunteerStatus': {
+    $user = requireMember();
+    $choir = (int)($_GET['choir'] ?? 0);
+    requireChoirAccess($user, $choir);
+    respond(volunteerStatus($choir, $user['username']));
+  }
+
+  case 'claimSlot': {
+    $user = requireMember();
+    $choir = (int)($body['choir'] ?? 0);
+    requireChoirAccess($user, $choir);
+    // The signup email is always the caller's login -- not client-supplied --
+    // so "you're signed up" and cancel stay reliable.
+    respond(volunteerClaim(
+      $choir,
+      trim((string)($body['date'] ?? '')),
+      trim((string)($body['taskName'] ?? '')),
+      trim((string)($body['volunteerName'] ?? '')),
+      trim((string)($body['phoneNumber'] ?? '')),
+      $user['username']
+    ));
+  }
+
+  case 'releaseSlot': {
+    $user = requireMember();
+    $choir = (int)($body['choir'] ?? 0);
+    requireChoirAccess($user, $choir);
+    respond(volunteerRelease(
+      $choir,
+      trim((string)($body['date'] ?? '')),
+      trim((string)($body['taskName'] ?? '')),
+      $user['username']
+    ));
   }
 
   // -- MyDataWorld login (shared with My Apps Hub / T-Minus / the member app) --

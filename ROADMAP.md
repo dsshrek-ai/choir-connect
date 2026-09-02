@@ -8,8 +8,14 @@ Status of the app and what's planned next. See `STACK.md` for architecture and
 - **Rehearsal Tracks** — `programs.html` → `program.html` (song list) →
   `song.html` (part tracks, play / download). Multi-choir throughout.
 - **Choir picker** — header switcher when a member is in more than one choir.
+- **Volunteer sign-ups** — `volunteer.html`: per-choir volunteer needs, sign up
+  for a slot (named-lock so the last slot can't double-book), cancel your own
+  signup. No notification email in v1. API: `volunteerStatus` / `claimSlot` /
+  `releaseSlot`; tables `cc_volunteer_tasks`, `cc_volunteer_signups`; admin
+  editors `VolunteerTasks` / `VolunteerSignups`.
 - **Admin kiosk** (`admin.html`) — generic editor for Choirs, Programs,
-  RehearsalTracks, and **ChoirUsers** (assign users to choirs).
+  RehearsalTracks, ChoirUsers (assign users to choirs), VolunteerTasks,
+  VolunteerSignups.
 - **Two-layer auth** — My Apps Hub `app_access` grant (`choir-connect` /
   `choir-connect-admin`) + `cc_choir_users` per-choir scoping. Usage logged to
   the shared `app_usage_log`.
@@ -29,91 +35,7 @@ Grouping by number is the model; the fix is consistent data entry.
 
 ## Planned
 
-### 1. Volunteer sign-ups  — next
-
-Mirrors the SoJo member app's Volunteer feature, scoped per choir: the admin
-posts volunteer needs (a task, a date, a number of slots); members see what's
-open and sign up for a slot.
-
-**Database** (add to `api/schema.sql`, run by hand in phpMyAdmin):
-
-```sql
-CREATE TABLE IF NOT EXISTS cc_volunteer_tasks (
-  id            INT AUTO_INCREMENT PRIMARY KEY,
-  choir_number  INT NOT NULL,
-  entry_date    DATE NULL,
-  task_name     VARCHAR(255) NOT NULL,
-  slots_needed  INT NOT NULL DEFAULT 0,
-  idx           INT NOT NULL DEFAULT 0
-) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS cc_volunteer_signups (
-  id              INT AUTO_INCREMENT PRIMARY KEY,
-  choir_number    INT NOT NULL,
-  entry_date      DATE NULL,
-  task_name       VARCHAR(255) NOT NULL,
-  volunteer_name  VARCHAR(255) NULL,
-  phone_number    VARCHAR(30)  NULL,
-  email           VARCHAR(255) NULL,
-  signed_up_at    DATETIME NULL,
-  KEY ix_signups (choir_number, entry_date, task_name)
-) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-```
-
-**API** (`api/api.php`):
-
-- `$DATA_TABLES` — add
-  `VolunteerTasks` → `cc_volunteer_tasks`
-  (`ChoirNumber, Date, TaskName, SlotsNeeded, Index`) and
-  `VolunteerSignups` → `cc_volunteer_signups`
-  (`ChoirNumber, Date, TaskName, VolunteerName, PhoneNumber, Email, Timestamp`).
-  Add `SlotsNeeded` to `$NUMERIC_COLUMNS`.
-- Reintroduce a `$DATE_COLUMNS` set (`Date`) and the empty-string → `NULL`
-  handling in `adminInsertRow` / `adminUpdateRow` — MySQL rejects `''` for a
-  `DATE` column. (The core build dropped this; Volunteer and Schedule both need
-  it.)
-- `volunteerStatus` (GET, `?choir=N`, `requireMember` + `requireChoirAccess`) —
-  the choir's tasks each with `SlotsFilled` (count of matching signups) and
-  `YouSignedUp` (bool — is there a signup for this task whose `email` equals the
-  caller's login email):
-  `[{ Date, TaskName, SlotsNeeded, SlotsFilled, YouSignedUp }]`.
-- `claimSlot` (POST, `{ choir, date, taskName, volunteerName, phoneNumber, email }`,
-  `requireMember` + `requireChoirAccess`) — `GET_LOCK('cc_claim_slot', 10)`,
-  recompute the task's filled count, reject if full, `INSERT` the signup with
-  `choir_number`, `RELEASE_LOCK`. Returns `{ ok }` or `{ ok:false, reason }`
-  (`locked` / `not-found` / `full`). Same named-lock pattern as the member app's
-  `claimSlot`.
-- `releaseSlot` (POST, `{ choir, date, taskName }`, `requireMember` +
-  `requireChoirAccess`) — `DELETE` the caller's own signup for that task
-  (`choir_number` + `entry_date` + `task_name` + `email = $user['username']`).
-  Returns `{ ok }`. Members can cancel their own signup; they can't touch
-  anyone else's.
-
-No notification email in v1 — a signup is just recorded. (Revisit a per-choir
-coordinator email later if it's wanted.)
-
-**Front end:**
-
-- New `volunteer.html` — `ensureActiveChoir()` → `fetchChoirData('volunteerStatus')`;
-  list each task with "X of Y filled". If `YouSignedUp` → show "You're signed
-  up" + a **Cancel** button (`postAction('releaseSlot', { choir, date, taskName })`).
-  Otherwise, when slots remain, a small form (name + phone; email pre-filled from
-  `getSavedEmail()`) → `postAction('claimSlot', { choir: getActiveChoir(), ... })`.
-  Refresh the list after either action. Model the layout on the member app's
-  `volunteer.html`.
-- `js/api.js` — add `{ Label: 'Volunteer', PageFile: 'volunteer.html' }` to
-  `NAV_ITEMS`.
-- `admin.html` — add `VolunteerTasks` and `VolunteerSignups` to `TABLES`; give
-  `Date` an `<input type="date">` (a `DATE_COLUMNS` set) and `SlotsNeeded` a
-  number input.
-
-**Deploy:** run the two `CREATE TABLE`s in phpMyAdmin; re-upload `api/api.php`,
-`admin.html`, `js/api.js`, and the new `volunteer.html`.
-
-**Settled:** no notification email for v1; members can cancel their own signup
-(`releaseSlot`).
-
-### 2. Schedule
+### 1. Schedule
 
 `cc_schedule (choir_number, event_date, time_text, location, map_url, instructions,
 notes, idx)`. `schedule.html` sorts by date + time **descending, including past
@@ -121,7 +43,7 @@ events**; Location becomes a Google Maps link
 (`https://www.google.com/maps/search/?api=1&query=<encoded>`). Admin registry
 entry `Schedule`; reuses the `$DATE_COLUMNS` handling from the Volunteer work.
 
-### 3. Member List
+### 2. Member List
 
 `cc_members (choir_number, name, address, phone, email, photo_url, hide_address,
 hide_phone, hide_email, sort_order)`. `members.html` renders contact cards with
@@ -130,7 +52,7 @@ maps link for the address. Admin maintains the rows; a singer whose login email
 matches their row gets a small `patchMyPrivacy` action toggling only their three
 `hide_*` flags. Photo = pasted image URL.
 
-### 4. Configurable nav (if the fixed nav becomes limiting)
+### 3. Configurable nav (if the fixed nav becomes limiting)
 
 `cc_nav_items` + a `navItems` action, mirroring the member app's
 `choir_nav_items`, so the top nav is admin-editable instead of the `NAV_ITEMS`

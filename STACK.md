@@ -6,8 +6,9 @@ How Choir Connect is built and how it fits with its sibling apps.
 
 - Static HTML/CSS/vanilla JS — no framework, no build step, no bundler.
 - A few self-contained pages (`index.html`, `programs.html`, `program.html`,
-  `song.html`, `admin.html`), each with its own inline `<script>`. The
-  rehearsal-tracks flow is programs -> program (song titles) -> song (tracks).
+  `song.html`, `volunteer.html`, `admin.html`), each with its own inline
+  `<script>`. The rehearsal-tracks flow is programs -> program (song titles) ->
+  song (tracks).
 - One shared `style.css` and one shared `js/api.js` (fetch wrapper, SSO/login
   helpers, the nav + multi-choir picker bootstrap).
 - Hosted on **GitHub Pages** — `git push` to `main` auto-deploys.
@@ -68,6 +69,5 @@ Every successful member action also upserts a row into the shared
 
 ## Planned (not yet built)
 
-See `ROADMAP.md` for the full plan. Next up: **Volunteer sign-ups** (admin posts
-volunteer needs per choir; members claim slots). Then **Schedule** and
-**Member List**.
+See `ROADMAP.md` for the full plan. Next up: **Schedule** (per-choir events,
+newest-first including past, Google Maps links). Then **Member List**.

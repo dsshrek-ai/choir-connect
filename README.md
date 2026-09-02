@@ -12,7 +12,7 @@ the app.
 
 See [SETUP.md](SETUP.md) for deployment, [STACK.md](STACK.md) for how it fits
 together, and [ROADMAP.md](ROADMAP.md) for what's shipped and what's planned
-(Volunteer sign-ups is next).
+(Schedule is next).
 
 ## Files
 
@@ -20,9 +20,11 @@ together, and [ROADMAP.md](ROADMAP.md) for what's shipped and what's planned
 - `programs.html` — the choir's programs, newest first
 - `program.html` — one program's song titles (pick one)
 - `song.html` — all part tracks for the selected song (play / download)
-- `admin.html` — maintenance kiosk: Choirs, Programs, RehearsalTracks, and
-  **ChoirUsers** (assign users to choirs). Own login, gated on the
-  `choir-connect-admin` app grant.
+- `volunteer.html` — the choir's volunteer needs; sign up for a slot or cancel
+  your own signup
+- `admin.html` — maintenance kiosk: Choirs, Programs, RehearsalTracks,
+  **ChoirUsers** (assign users to choirs), VolunteerTasks, VolunteerSignups.
+  Own login, gated on the `choir-connect-admin` app grant.
 - `style.css` — shared styles (one file, no build step)
 - `js/api.js` — shared fetch wrapper, SSO capture, nav + choir picker
 - `api/api.php` — backend: shared MyDataWorld login + per-app + per-choir access

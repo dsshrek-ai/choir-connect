@@ -265,6 +265,37 @@ form label {
   margin-bottom: 0.5rem;
 }
 
+/* Volunteer (volunteer.html) */
+.vol-meta {
+  color: var(--color-primary-dark);
+  font-size: 0.95rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.vol-signed {
+  font-weight: bold;
+  color: var(--color-primary);
+  margin: 0.25rem 0 0.75rem;
+}
+
+.vol-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.vol-form label {
+  display: block;
+  font-weight: bold;
+  font-size: 0.95rem;
+}
+
+.vol-form input {
+  display: block;
+  margin-top: 0.25rem;
+}
+
 .song-parts {
   display: flex;
   flex-direction: column;

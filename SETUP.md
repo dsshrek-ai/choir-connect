@@ -115,6 +115,25 @@ Until this is in place, Download falls back to opening the file in a new tab.
 Add a tile for Choir Connect to `DennisApps/personalapps.html` and re-upload that
 file to seniorfamily.org (it isn't deployed by git).
 
+## 10. Volunteer sign-ups
+
+The Volunteer page (`volunteer.html`) lets members claim slots on volunteer needs
+the admin posts, and cancel their own signup. It was added after the first
+deploy, so:
+
+1. **Database** — run the `cc_volunteer_tasks` / `cc_volunteer_signups`
+   `CREATE TABLE`s from `api/schema.sql` (the "SCHEMA CHANGE: Volunteer sign-ups"
+   block) in phpMyAdmin.
+2. **Redeploy** — re-upload `api/api.php`, and push the repo so GitHub Pages picks
+   up `volunteer.html`, `js/api.js` (nav link), `style.css`, and `admin.html`.
+3. **Post needs** — in `admin.html` → **VolunteerTasks**, add a row per need:
+   `ChoirNumber`, an optional `Date`, `TaskName`, `SlotsNeeded`, `Index` (list
+   order). Members then sign up from the Volunteer page; their signups show under
+   **VolunteerSignups** (delete a row there to free a slot).
+
+`Email` on a signup is the member's login email — that's how "Cancel my signup"
+finds their row. No notification email is sent in v1.
+
 ## Single sign-on
 
 Both apps are seeded with `sso_enabled = 1`, so launching either from My Apps Hub

@@ -62,14 +62,19 @@
     Programs: ['ChoirNumber', 'ProgramNumber', 'Name', 'Sequence', 'Index'],
     RehearsalTracks: ['ChoirNumber', 'ProgramNumber', 'SongNumber', 'SongTitle', 'SongFolder', 'TrackSequence', 'ShortDescription', 'TrackName', 'FileName', 'Index'],
     ChoirUsers: ['ChoirNumber', 'UserEmail'],
+    VolunteerTasks: ['ChoirNumber', 'Date', 'TaskName', 'SlotsNeeded', 'Index'],
+    VolunteerSignups: ['ChoirNumber', 'Date', 'TaskName', 'VolunteerName', 'PhoneNumber', 'Email', 'Timestamp'],
   };
   const TABLE_HINTS = {
     Choirs: 'One row per choir. FolderSlug is the folder name under the files root that holds this choir’s Songs/ folder (e.g. "DeciBelles"). Index sets the order in the choir picker.',
     Programs: 'A program is a concert / season / set list. Sequence controls order — the highest Sequence shows first ("most recent program on top").',
     RehearsalTracks: 'One row per audio file. Tracks group by SongNumber. SongFolder + FileName locate the file: <FilesRoot>/<choir FolderSlug>/Songs/<SongFolder>/<FileName>. TrackSequence orders tracks within a song.',
     ChoirUsers: 'Assign apps-hub users to choirs. UserEmail must exactly match the email they sign in with. A person also needs the "Choir Connect" app granted in My Apps Hub to open the app at all.',
+    VolunteerTasks: 'Volunteer needs for a choir. Date is optional. SlotsNeeded is how many people can sign up. Index orders the list on the member Volunteer page.',
+    VolunteerSignups: 'Read-only, mostly — members add these from the Volunteer page. Email is the member’s login; that’s how "cancel my signup" finds their row. Delete a row here to free a slot.',
   };
-  const NUMBER_COLUMNS = new Set(['ChoirNumber', 'ProgramNumber', 'SongNumber', 'Sequence', 'TrackSequence', 'Index']);
+  const NUMBER_COLUMNS = new Set(['ChoirNumber', 'ProgramNumber', 'SongNumber', 'Sequence', 'TrackSequence', 'SlotsNeeded', 'Index']);
+  const DATE_COLUMNS = new Set(['Date']);
 
   const loginScreen = document.getElementById('login-screen');
   const panel = document.getElementById('panel');
@@ -168,6 +173,10 @@
 
   function fieldInput(col, value) {
     const safeVal = escapeHtml(value ?? '');
+    if (DATE_COLUMNS.has(col)) {
+      // value is 'YYYY-MM-DD' from the API, or '' -- what <input type="date"> wants.
+      return `<input type="date" data-col="${col}" value="${safeVal}">`;
+    }
     if (NUMBER_COLUMNS.has(col)) {
       return `<input type="number" data-col="${col}" value="${escapeHtml(value ?? '0')}">`;
     }

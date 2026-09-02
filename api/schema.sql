@@ -93,6 +93,34 @@ INSERT INTO cc_programs (choir_number, program_number, name, sequence, idx) VALU
   (1, 1, 'Sample Program', 10, 10)
 ON DUPLICATE KEY UPDATE name = VALUES(name), sequence = VALUES(sequence), idx = VALUES(idx);
 
+-- ---------- SCHEMA CHANGE: Volunteer sign-ups ----------
+-- Run once. Admin posts volunteer needs per choir (a task, an optional date,
+-- a slot count); members claim a slot and can cancel their own signup. A
+-- signup is tied to a member by the email they log in with (users.username),
+-- so releaseSlot can find and remove only their own row.
+
+CREATE TABLE IF NOT EXISTS cc_volunteer_tasks (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  choir_number  INT NOT NULL,
+  entry_date    DATE NULL,
+  task_name     VARCHAR(255) NOT NULL,
+  slots_needed  INT NOT NULL DEFAULT 0,
+  idx           INT NOT NULL DEFAULT 0,
+  KEY ix_vtasks_choir (choir_number)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS cc_volunteer_signups (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  choir_number    INT NOT NULL,
+  entry_date      DATE NULL,
+  task_name       VARCHAR(255) NOT NULL,
+  volunteer_name  VARCHAR(255) NULL,
+  phone_number    VARCHAR(30)  NULL,
+  email           VARCHAR(255) NULL,
+  signed_up_at    DATETIME NULL,
+  KEY ix_vsignups (choir_number, task_name, entry_date)
+) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 -- BOOTSTRAP (run once, after you've signed up through My Apps Hub):
 --
