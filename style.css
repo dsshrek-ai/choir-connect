@@ -501,10 +501,8 @@ a {
     font-size: 16px;
   }
   nav.site-nav {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    /* wrap onto new lines on narrow screens instead of scrolling sideways */
+    flex-wrap: wrap;
     padding-bottom: 0.25rem;
   }
   nav.site-nav a {
