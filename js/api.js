@@ -308,7 +308,7 @@ function renderNav() {
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
   nav.innerHTML = NAV_ITEMS.map(item => {
     const isCurrent = item.PageFile === currentPage
-      || (currentPage === 'program.html' && item.PageFile === 'programs.html');
+      || (['program.html', 'song.html'].includes(currentPage) && item.PageFile === 'programs.html');
     return `<a href="${escapeHtml(item.PageFile)}"${isCurrent ? ' aria-current="page"' : ''}>${escapeHtml(item.Label)}</a>`;
   }).join('');
 }

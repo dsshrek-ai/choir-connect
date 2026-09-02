@@ -6,7 +6,8 @@ How Choir Connect is built and how it fits with its sibling apps.
 
 - Static HTML/CSS/vanilla JS — no framework, no build step, no bundler.
 - A few self-contained pages (`index.html`, `programs.html`, `program.html`,
-  `admin.html`), each with its own inline `<script>`.
+  `song.html`, `admin.html`), each with its own inline `<script>`. The
+  rehearsal-tracks flow is programs -> program (song titles) -> song (tracks).
 - One shared `style.css` and one shared `js/api.js` (fetch wrapper, SSO/login
   helpers, the nav + multi-choir picker bootstrap).
 - Hosted on **GitHub Pages** — `git push` to `main` auto-deploys.

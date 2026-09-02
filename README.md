@@ -17,7 +17,8 @@ together.
 
 - `index.html` — landing page: shows the active choir, links into Rehearsal Tracks
 - `programs.html` — the choir's programs, newest first
-- `program.html` — one program's songs and part tracks (play / download)
+- `program.html` — one program's song titles (pick one)
+- `song.html` — all part tracks for the selected song (play / download)
 - `admin.html` — maintenance kiosk: Choirs, Programs, RehearsalTracks, and
   **ChoirUsers** (assign users to choirs). Own login, gated on the
   `choir-connect-admin` app grant.

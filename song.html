@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Song | Choir Connect</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<header class="site-header">
+  <h1>Choir Connect</h1>
+  <nav class="site-nav" id="site-nav"></nav>
+  <div id="choir-picker" class="choir-picker"></div>
+</header>
+<main id="main-content">
+  <p id="back-link"><a href="programs.html">&larr; Back to Rehearsal Tracks</a></p>
+  <div id="content">Loading song&hellip;</div>
+</main>
+<footer class="site-footer">Choir Connect</footer>
+<script src="js/api.js"></script>
+<script>
+  (async () => {
+    const el = document.getElementById('content');
+    const params = new URLSearchParams(window.location.search);
+    const program = params.get('program');
+    const song = params.get('song');
+    if (!program || !song) {
+      el.innerHTML = `<p class="placeholder-note">No song selected.</p>`;
+      return;
+    }
+    document.getElementById('back-link').innerHTML =
+      `<a href="program.html?program=${encodeURIComponent(program)}">&larr; Back to song list</a>`;
+    try {
+      await captureSsoEmail();
+      await ensureActiveChoir();
+      const data = await fetchChoirData('song', { program, song });
+      const s = data.Song || {};
+      const tracks = s.Tracks || [];
+      const title = s.SongTitle || ('Song ' + s.SongNumber);
+      el.innerHTML = `
+        <h2>${escapeHtml(title)}</h2>
+        <p class="song-part-desc">${escapeHtml(data.ProgramName || '')}</p>
+        ${tracks.length === 0 ? `<p class="placeholder-note">No tracks have been added for this song yet.</p>` : `
+          <div class="card">
+            <div class="song-parts">
+              ${tracks.map(renderTrack).join('')}
+            </div>
+          </div>
+        `}
+      `;
+      wireForceDownloads(el);
+    } catch (e) {
+      handleFetchError(el, e);
+    }
+  })();
+
+  function renderTrack(t) {
+    return `
+      <div class="song-part-row">
+        <span class="song-part-label">
+          ${escapeHtml(t.TrackName || 'Track')}
+          ${t.ShortDescription ? `<span class="song-part-desc">${escapeHtml(t.ShortDescription)}</span>` : ''}
+        </span>
+        ${t.Url ? `
+          <div class="song-part-controls">
+            <audio controls preload="none" src="${escapeHtml(t.Url)}"></audio>
+            <a class="btn" href="${escapeHtml(t.Url)}" download="${escapeHtml(t.FileName || '')}" data-force-download>Download</a>
+          </div>
+        ` : `<span class="song-part-desc">File not available yet.</span>`}
+      </div>
+    `;
+  }
+
+  // song.html (GitHub Pages) links to files on seniorfamily.org -- a
+  // cross-origin target, so the plain `download` attribute is ignored by
+  // browsers and a click would just open the audio player. Pulling the file
+  // in via fetch()+Blob and saving from there works regardless of origin, but
+  // needs the file host to allow cross-origin reads (an .htaccess with
+  // Access-Control-Allow-Origin in the choir-connect-files/ folder). If that
+  // isn't set up yet, fall back to opening the file directly.
+  function wireForceDownloads(container) {
+    container.querySelectorAll('a[data-force-download]').forEach(link => {
+      link.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        try {
+          const res = await fetch(link.href);
+          if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+          const blob = await res.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const tempLink = document.createElement('a');
+          tempLink.href = blobUrl;
+          tempLink.download = link.getAttribute('download') || '';
+          document.body.appendChild(tempLink);
+          tempLink.click();
+          tempLink.remove();
+          URL.revokeObjectURL(blobUrl);
+        } catch (e) {
+          window.open(link.href, '_blank');
+        }
+      });
+    });
+  }
+</script>
+</body>
+</html>

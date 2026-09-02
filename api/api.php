@@ -382,6 +382,28 @@ switch ($action) {
     respond(programDetail($choir, $program));
   }
 
+  // One song within a program: { ProgramName, Song: { SongNumber, SongTitle,
+  // Tracks: [...] } }. Reuses programDetail() and picks out the one song.
+  case 'song': {
+    $user = requireMember();
+    $choir = (int)($_GET['choir'] ?? 0);
+    $program = (int)($_GET['program'] ?? 0);
+    $song = (int)($_GET['song'] ?? 0);
+    requireChoirAccess($user, $choir);
+    if ($program <= 0 || $song <= 0) {
+      fail('Missing program or song number', 400);
+    }
+    $detail = programDetail($choir, $program);
+    $match = null;
+    foreach ($detail['Songs'] as $s) {
+      if ((int)$s['SongNumber'] === $song) { $match = $s; break; }
+    }
+    if ($match === null) {
+      fail('Song not found', 404);
+    }
+    respond(['ProgramName' => $detail['ProgramName'], 'Song' => $match]);
+  }
+
   // -- MyDataWorld login (shared with My Apps Hub / T-Minus / the member app) --
 
   case 'login': {
