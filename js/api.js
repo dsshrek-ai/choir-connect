@@ -92,6 +92,31 @@ async function postAction(action, payload) {
   return res.json();
 }
 
+// Sends a multipart write action (a file upload), e.g.
+// postForm("uploadMyPhoto", { choir: 1 }, { photo: fileBlob }). Don't set
+// Content-Type -- the browser adds the multipart boundary.
+async function postForm(action, fields = {}, files = {}) {
+  if (!isConfigured()) {
+    throw new Error("not-configured");
+  }
+  const fd = new FormData();
+  fd.append("action", action);
+  Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+  Object.entries(files).forEach(([k, f]) => fd.append(k, f));
+  const res = await fetch(CONFIG.API_URL, {
+    method: "POST",
+    headers: memberAuthHeaders(),
+    body: fd,
+  });
+  if (res.status === 401 || res.status === 403) {
+    throw new Error("not-authorized");
+  }
+  if (!res.ok) {
+    throw new Error(`Request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 // Loads the choirs this member can see and makes sure one is active:
 //  - 0 choirs -> throws Error('no-choir')
 //  - saved active choir not in the list (or none saved) -> picks the first

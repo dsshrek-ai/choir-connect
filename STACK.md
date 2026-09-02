@@ -52,6 +52,10 @@ Every successful member action also upserts a row into the shared
 - Rehearsal-track audio files are real uploads, FTP'd into
   `SONG_FILES_BASE_URL/<choir FolderSlug>/Songs/<SongFolder>/`. The database
   stores only folder + filename; `api.php` builds the URL at read time.
+- Member roster photos are written by `api.php` itself (the `uploadMyPhoto`
+  action) into `PHOTO_UPLOAD_DIR`, served from `SONG_FILES_BASE_URL/Photos/`.
+  `cc_members.photo_url` holds a bare filename (an absolute URL there is used
+  as-is instead). One photo per person, keyed to a hash of their login email.
 - The files folder needs its own `.htaccess` with
   `Header set Access-Control-Allow-Origin "*"` so the GitHub Pages front end can
   fetch a file to force a real download (a cross-origin `<a download>` is

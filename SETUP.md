@@ -24,7 +24,8 @@ It's safe to run even if `users`/`sessions` already exist (those use
 
 1. Copy `api/config.example.php` to `api/config.php` and fill in the real
    `DB_NAME`, `DB_USER`, `DB_PASS` (same credentials as your other MyDataWorld
-   apps) and `SONG_FILES_BASE_URL`.
+   apps) and `SONG_FILES_BASE_URL`. `PHOTO_UPLOAD_DIR` can stay `''` for now —
+   set it later when you turn on member photo uploads (step 11).
 2. Upload the whole `api/` folder via FTP/File Manager — e.g.
    `seniorfamily.org/choir-connect-api/`.
 
@@ -153,15 +154,34 @@ The Members page (`members.html`) shows a choir's roster. Added after Schedule, 
    up `members.html`, `js/api.js` (nav link), `style.css`, and `admin.html`.
 3. **Add members** — in `admin.html` → **Members**, one row per singer:
    `ChoirNumber`, `Name`, `Status` (Current / Past), `Address`, `Phone`, `Email`,
-   `PhotoUrl` (pasted image link), `HideAddress` / `HidePhone` / `HideEmail`
-   (No / Yes), `Index`.
+   `PhotoUrl`, `HideAddress` / `HidePhone` / `HideEmail` (No / Yes), `Index`.
+   You mainly need `ChoirNumber`, `Name`, and `Email` — the singer can fill in
+   the rest themselves (next point).
 
 - **Status "Past"** hides the member on the page unless the viewer ticks
   **"Show past members"** (default off; the choice is remembered per browser).
-- **`Email`** must match the singer's login email for them to manage their own
-  Hide flags from the Members page. Hidden fields are removed from the API for
-  everyone except that singer viewing their own card; the admin kiosk always sees
-  everything.
+- **`Email`** must match the singer's login email. When it does, that singer can
+  edit their own **Name / Address / Phone / Photo** and the **Hide** flags from
+  the Members page — their edits apply to every choir they're on. Email and
+  Status are never editable by the member (email is the login; Status is yours).
+- Hidden fields are removed from the API for everyone except that singer viewing
+  their own card; the admin kiosk always sees everything.
+- **`PhotoUrl`**: a bare filename means a file in the Photos folder
+  (member-uploaded, or one you FTP in yourself); a full `http(s)` link is used
+  as-is.
+
+### Turn on member photo uploads
+
+1. Create a **`Photos`** folder inside your `choir-connect-files` folder (the one
+   `SONG_FILES_BASE_URL` points at) and make it writable by PHP.
+2. Set `PHOTO_UPLOAD_DIR` in `api/config.php` to that folder's **server path**
+   (e.g. `/home/ACCOUNT/public_html/choir-connect-files/Photos`), then re-upload
+   `api/config.php`.
+3. That's it — the "Add / Change photo" button appears on each singer's own card.
+   Uploads are capped at 4 MB and must be JPG / PNG / WebP (the page also
+   downscales large images before sending). One photo per person, shared across
+   their choirs. Leaving `PHOTO_UPLOAD_DIR` blank just hides the upload button;
+   you can still paste a `PhotoUrl` in the admin kiosk.
 
 ## Single sign-on
 

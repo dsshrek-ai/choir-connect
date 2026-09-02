@@ -354,6 +354,23 @@ function choirSchedule(int $choirNumber): array {
   return $out;
 }
 
+// Resolves a stored photo_url to something the browser can load: an absolute
+// URL is passed through as-is; anything else is treated as a filename in the
+// Photos folder (SONG_FILES_BASE_URL/Photos/<name>). '' if nothing usable.
+function memberPhotoUrl(string $stored): string {
+  $stored = trim($stored);
+  if ($stored === '') {
+    return '';
+  }
+  if (preg_match('#^https?://#i', $stored)) {
+    return $stored;
+  }
+  if (defined('SONG_FILES_BASE_URL') && SONG_FILES_BASE_URL !== '') {
+    return rtrim(SONG_FILES_BASE_URL, '/') . '/Photos/' . rawurlencode($stored);
+  }
+  return '';
+}
+
 // A choir's member roster. Past members are left out unless $includePast.
 // Each row hides address / phone / email that the member chose to hide --
 // EXCEPT the caller's own row (matched by login email), which comes back in
@@ -386,7 +403,7 @@ function choirMembers(int $choirNumber, string $meEmail, bool $includePast): arr
     $entry = [
       'Name' => (string)($row['name'] ?? ''),
       'Status' => (string)($row['status'] ?? ''),
-      'PhotoUrl' => trim((string)($row['photo_url'] ?? '')),
+      'PhotoUrl' => memberPhotoUrl((string)($row['photo_url'] ?? '')),
       'Address' => $shownAddress,
       'Phone' => $showPhone ? $phone : '',
       'Email' => $showEmail ? $rowEmail : '',
@@ -406,25 +423,97 @@ function choirMembers(int $choirNumber, string $meEmail, bool $includePast): arr
   return $out;
 }
 
-// A member updates the hide_* flags on their own row (the one whose email
-// matches their login) for one choir. Nothing else is touched.
-function updateMyPrivacy(int $choir, string $meEmail, int $hideAddress, int $hidePhone, int $hideEmail): array {
+// True if the caller's login email is on at least one choir's roster.
+function isOnRoster(string $meEmail): bool {
   if (trim($meEmail) === '') {
-    return ['ok' => false, 'reason' => 'not-found'];
+    return false;
   }
-  $stmt = db()->prepare(
-    'UPDATE cc_members SET hide_address = ?, hide_phone = ?, hide_email = ?
-     WHERE choir_number = ? AND email = ?'
-  );
+  $stmt = db()->prepare('SELECT 1 FROM cc_members WHERE email = ? LIMIT 1');
+  $stmt->bind_param('s', $meEmail);
+  $stmt->execute();
+  $found = (bool)$stmt->get_result()->fetch_row();
+  $stmt->close();
+  return $found;
+}
+
+// A member edits their own roster entry. Name / address / phone / the hide_*
+// flags are applied to ALL of that member's rows (matched by login email), so
+// their info stays the same across every choir. Email and Status are never
+// touched here -- email is the login, Status is admin-only.
+function updateMyProfile(string $meEmail, string $name, string $address, string $phone,
+    int $hideAddress, int $hidePhone, int $hideEmail): array {
+  if (!isOnRoster($meEmail)) {
+    return ['ok' => false, 'reason' => 'not-on-roster'];
+  }
+  $name = trim($name);
+  if ($name === '') {
+    return ['ok' => false, 'reason' => 'name-required'];
+  }
   $ha = $hideAddress ? 1 : 0;
   $hp = $hidePhone ? 1 : 0;
   $he = $hideEmail ? 1 : 0;
-  $stmt->bind_param('iiiis', $ha, $hp, $he, $choir, $meEmail);
+  $address = trim($address);
+  $phone = trim($phone);
+  $stmt = db()->prepare(
+    'UPDATE cc_members SET name = ?, address = ?, phone = ?,
+       hide_address = ?, hide_phone = ?, hide_email = ?
+     WHERE email = ?'
+  );
+  $stmt->bind_param('sssiiis', $name, $address, $phone, $ha, $hp, $he, $meEmail);
   $stmt->execute();
   $stmt->close();
-  // No row for this email is a harmless no-op -- the page re-fetches and just
-  // won't show the toggles if the caller isn't on the roster.
   return ['ok' => true];
+}
+
+// A member uploads their own photo. Written to PHOTO_UPLOAD_DIR with a filename
+// keyed to a hash of their email (one photo per person), and photo_url on all
+// their rows is set to that bare filename -- memberPhotoUrl() turns it into a
+// URL under SONG_FILES_BASE_URL/Photos/ at read time.
+function saveMyPhoto(string $meEmail, array $file): array {
+  if (!isOnRoster($meEmail)) {
+    return ['ok' => false, 'reason' => 'not-on-roster'];
+  }
+  if (!defined('PHOTO_UPLOAD_DIR') || PHOTO_UPLOAD_DIR === ''
+      || !is_dir(PHOTO_UPLOAD_DIR) || !is_writable(PHOTO_UPLOAD_DIR)) {
+    return ['ok' => false, 'reason' => 'not-configured'];
+  }
+  if (!isset($file['tmp_name']) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
+      || !is_uploaded_file($file['tmp_name'])) {
+    return ['ok' => false, 'reason' => 'no-file'];
+  }
+  if (($file['size'] ?? 0) > 4 * 1024 * 1024) {
+    return ['ok' => false, 'reason' => 'too-big'];
+  }
+
+  // getimagesize both identifies the type and proves the bytes are a real,
+  // decodable image (fileinfo extension not required).
+  $info = @getimagesize($file['tmp_name']);
+  $mime = is_array($info) ? ($info['mime'] ?? '') : '';
+  $extByMime = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+  if (!isset($extByMime[$mime])) {
+    return ['ok' => false, 'reason' => 'bad-type'];
+  }
+  $ext = $extByMime[$mime];
+  $base = sha1(strtolower(trim($meEmail)));
+  $filename = $base . '.' . $ext;
+
+  // Drop any prior photo this person had under a different extension.
+  foreach (['jpg', 'png', 'webp'] as $other) {
+    if ($other !== $ext) {
+      @unlink(rtrim(PHOTO_UPLOAD_DIR, '/') . '/' . $base . '.' . $other);
+    }
+  }
+
+  if (!move_uploaded_file($file['tmp_name'], rtrim(PHOTO_UPLOAD_DIR, '/') . '/' . $filename)) {
+    return ['ok' => false, 'reason' => 'write-failed'];
+  }
+
+  $stmt = db()->prepare('UPDATE cc_members SET photo_url = ? WHERE email = ?');
+  $stmt->bind_param('ss', $filename, $meEmail);
+  $stmt->execute();
+  $stmt->close();
+
+  return ['ok' => true, 'photoUrl' => memberPhotoUrl($filename)];
 }
 
 // One program's songs + tracks. Tracks are grouped into one entry per
@@ -614,8 +703,14 @@ function volunteerRelease(int $choir, string $date, string $task, string $meEmai
 // ---- Router ----
 
 $method = $_SERVER['REQUEST_METHOD'];
-$body = $method === 'POST' ? jsonBody() : [];
-$action = $method === 'GET' ? ($_GET['action'] ?? '') : ($body['action'] ?? '');
+// A file upload (uploadMyPhoto) comes in as multipart/form-data, so its action
+// and fields live in $_POST, not a JSON body.
+$isMultipart = $method === 'POST'
+  && strpos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'multipart/form-data') === 0;
+$body = ($method === 'POST' && !$isMultipart) ? jsonBody() : [];
+$action = $method === 'GET'
+  ? ($_GET['action'] ?? '')
+  : ($isMultipart ? ($_POST['action'] ?? '') : ($body['action'] ?? ''));
 
 switch ($action) {
 
@@ -719,19 +814,28 @@ switch ($action) {
     ));
   }
 
-  // -- Member List: a singer hides/shows their own contact fields --
+  // -- Member List: a singer maintains their own roster entry --
 
-  case 'patchMyPrivacy': {
+  case 'updateMyProfile': {
     $user = requireMember();
     $choir = (int)($body['choir'] ?? 0);
     requireChoirAccess($user, $choir);
-    respond(updateMyPrivacy(
-      $choir,
+    respond(updateMyProfile(
       $user['username'],
+      (string)($body['name'] ?? ''),
+      (string)($body['address'] ?? ''),
+      (string)($body['phone'] ?? ''),
       (int)($body['hideAddress'] ?? 0),
       (int)($body['hidePhone'] ?? 0),
       (int)($body['hideEmail'] ?? 0)
     ));
+  }
+
+  case 'uploadMyPhoto': {
+    $user = requireMember();
+    $choir = (int)($_POST['choir'] ?? 0);
+    requireChoirAccess($user, $choir);
+    respond(saveMyPhoto($user['username'], $_FILES['photo'] ?? []));
   }
 
   // -- MyDataWorld login (shared with My Apps Hub / T-Minus / the member app) --

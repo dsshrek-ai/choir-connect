@@ -25,3 +25,11 @@ define('FROM_EMAIL', 'noreply@seniorfamily.org');
 // track) -- api.php builds the real URL from this constant at read time, so
 // moving the files only means changing this one value.
 define('SONG_FILES_BASE_URL', 'https://seniorfamily.org/choir-connect-files');
+
+// Server filesystem path of the folder where member-uploaded roster photos are
+// written (no trailing slash). Its public URL is SONG_FILES_BASE_URL/Photos/,
+// so create a "Photos" folder inside the choir-connect-files folder and put its
+// real path here, e.g. '/home/ACCOUNT/public_html/choir-connect-files/Photos'.
+// PHP must be able to write to it. Leave '' to disable photo uploads -- the
+// Members page then just won't offer the upload field.
+define('PHOTO_UPLOAD_DIR', '');

@@ -378,6 +378,42 @@ form label {
 
 .member-privacy input { width: auto; margin-right: 0.4rem; }
 
+/* "Edit my info" card */
+.member-me { border-color: var(--color-accent); }
+
+.member-me label {
+  display: block;
+  font-weight: bold;
+  font-size: 0.95rem;
+  margin-top: 0.6rem;
+}
+
+.member-me label input[type="text"],
+.member-me label input[type="tel"] {
+  display: block;
+  margin-top: 0.2rem;
+  font-weight: normal;
+}
+
+.member-photo-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 0.75rem 0;
+}
+
+.member-photo-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-pinned-bg);
+  color: var(--color-primary-dark);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.member-me .btn { font-size: 1rem; padding: 0.5rem 1rem; }
+
 .song-parts {
   display: flex;
   flex-direction: column;

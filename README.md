@@ -32,10 +32,12 @@ together, and [ROADMAP.md](ROADMAP.md) for what's shipped and what's planned
 - `api/api.php` — backend: shared MyDataWorld login + per-app + per-choir access
   checks, member reads (`choirs` / `schedule` / `members` / `programs` /
   `program` / `song` / `volunteerStatus`), member writes (`claimSlot` /
-  `releaseSlot` / `patchMyPrivacy`), and the generic admin table CRUD
+  `releaseSlot` / `updateMyProfile` / `uploadMyPhoto`), and the generic admin
+  table CRUD
 - `api/schema.sql` — the `cc_*` tables (run by hand in phpMyAdmin)
-- `api/config.example.php` — copy to `api/config.php` with real DB credentials +
-  `SONG_FILES_BASE_URL` (gitignored)
+- `api/config.example.php` — copy to `api/config.php` with real DB credentials,
+  `SONG_FILES_BASE_URL`, and (optional) `PHOTO_UPLOAD_DIR` for member photo
+  uploads (gitignored)
 - `api/.htaccess` — CORS header so the GitHub Pages front end can call the API
 
 ## Rehearsal track files

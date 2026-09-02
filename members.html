@@ -28,6 +28,7 @@
   const contentEl = document.getElementById('content');
   const statusEl = document.getElementById('status');
   const showPastEl = document.getElementById('show-past');
+  let members = [];
 
   function showStatus(msg) {
     if (!msg) { statusEl.style.display = 'none'; return; }
@@ -35,24 +36,13 @@
     statusEl.style.display = '';
   }
 
-  function memberCard(m, i) {
+  function otherCard(m) {
     const past = m.Status && m.Status.toLowerCase() === 'past';
     const addressHtml = m.Address
       ? `<p class="member-line">📍 ${m.MapLink
             ? `<a href="${escapeHtml(m.MapLink)}" target="_blank" rel="noopener">${escapeHtml(m.Address)}</a>`
             : escapeHtml(m.Address)}</p>`
       : '';
-    let privacy = '';
-    if (m.IsMe) {
-      privacy = `
-        <div class="member-privacy" data-i="${i}">
-          <p><strong>Your info</strong> — hide any of these from other members:</p>
-          <label><input type="checkbox" data-priv="address" ${m.HideAddress ? 'checked' : ''}> Hide my address</label>
-          <label><input type="checkbox" data-priv="phone" ${m.HidePhone ? 'checked' : ''}> Hide my phone</label>
-          <label><input type="checkbox" data-priv="email" ${m.HideEmail ? 'checked' : ''}> Hide my email</label>
-        </div>
-      `;
-    }
     return `
       <div class="card member-card${past ? ' member-past' : ''}">
         ${m.PhotoUrl ? `<img class="member-photo" src="${escapeHtml(m.PhotoUrl)}" alt="">` : ''}
@@ -60,16 +50,129 @@
           <h3>${escapeHtml(m.Name || 'Member')}${past ? ' <span class="badge">Past</span>' : ''}</h3>
           ${addressHtml}
           ${contactButtonsHtml(m.Phone, m.Email)}
-          ${privacy}
         </div>
       </div>
     `;
   }
 
-  let members = [];
+  function myCard(m, i) {
+    return `
+      <div class="card member-card member-me" data-i="${i}">
+        <div class="member-body">
+          <h3>${escapeHtml(m.Name || 'Your info')} <span class="badge">You</span></h3>
+          <p class="member-line song-part-desc">This is how other members see you. Email stays your sign-in address.</p>
+
+          <div class="member-photo-edit">
+            ${m.PhotoUrl ? `<img class="member-photo" src="${escapeHtml(m.PhotoUrl)}" alt="">` : `<span class="member-photo member-photo-empty">No photo</span>`}
+            <label class="btn" style="cursor:pointer;">
+              ${m.PhotoUrl ? 'Change photo' : 'Add photo'}
+              <input type="file" accept="image/jpeg,image/png,image/webp" data-photo hidden>
+            </label>
+          </div>
+
+          <label>Name<input type="text" data-field="name" value="${escapeHtml(m.Name || '')}"></label>
+          <label>Address<input type="text" data-field="address" value="${escapeHtml(m.Address || '')}"></label>
+          <label>Phone<input type="tel" data-field="phone" value="${escapeHtml(m.Phone || '')}"></label>
+          <p class="member-line"><strong>Email:</strong> ${escapeHtml(m.Email || '')} <span class="song-part-desc">(from My Apps Hub)</span></p>
+
+          <div class="member-privacy">
+            <p><strong>Hide from other members:</strong></p>
+            <label><input type="checkbox" data-priv="address" ${m.HideAddress ? 'checked' : ''}> My address</label>
+            <label><input type="checkbox" data-priv="phone" ${m.HidePhone ? 'checked' : ''}> My phone</label>
+            <label><input type="checkbox" data-priv="email" ${m.HideEmail ? 'checked' : ''}> My email</label>
+          </div>
+
+          <p><button type="button" class="btn" data-save>Save my info</button></p>
+        </div>
+      </div>
+    `;
+  }
+
+  function photoErrorText(reason) {
+    switch (reason) {
+      case 'not-configured': return "Photo uploads aren't set up yet — ask your director.";
+      case 'too-big': return 'That image is too large (max 4 MB).';
+      case 'bad-type': return 'Please choose a JPG, PNG, or WebP image.';
+      case 'not-on-roster': return "You're not on this choir's roster yet.";
+      default: return "Couldn't upload that photo — please try again.";
+    }
+  }
+
+  // Downscale to a modest JPEG so uploads stay small. Falls back to the raw
+  // file if the browser can't decode it (the server still validates).
+  function downscaleImage(file, maxDim = 800, quality = 0.85) {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let w = img.width, h = img.height;
+        if (Math.max(w, h) > maxDim) {
+          const s = maxDim / Math.max(w, h);
+          w = Math.round(w * s); h = Math.round(h * s);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(b => resolve(b || file), 'image/jpeg', quality);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
+
+  async function uploadPhoto(fileInput) {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    showStatus('Uploading photo…');
+    fileInput.disabled = true;
+    try {
+      const blob = await downscaleImage(file);
+      const res = await postForm('uploadMyPhoto', { choir: getActiveChoir() }, { photo: blob });
+      if (!res.ok) {
+        showStatus(photoErrorText(res.reason));
+        fileInput.disabled = false;
+        return;
+      }
+      showStatus('Photo updated.');
+      await render();
+    } catch (e) {
+      handleFetchError(contentEl, e);
+    }
+  }
+
+  async function saveMyInfo(card) {
+    const val = (sel) => (card.querySelector(sel) || {}).value || '';
+    const chk = (k) => card.querySelector(`input[data-priv="${k}"]`).checked ? 1 : 0;
+    const name = val('[data-field="name"]').trim();
+    if (!name) { showStatus('Please enter your name.'); return; }
+    card.querySelectorAll('input,button').forEach(el => el.disabled = true);
+    showStatus('Saving…');
+    try {
+      const res = await postAction('updateMyProfile', {
+        choir: getActiveChoir(),
+        name,
+        address: val('[data-field="address"]').trim(),
+        phone: val('[data-field="phone"]').trim(),
+        hideAddress: chk('address'),
+        hidePhone: chk('phone'),
+        hideEmail: chk('email'),
+      });
+      if (!res.ok) {
+        showStatus(res.reason === 'not-on-roster'
+          ? "You're not on this choir's roster yet."
+          : "Couldn't save that just now. Please try again.");
+        card.querySelectorAll('input,button').forEach(el => el.disabled = false);
+        return;
+      }
+      showStatus('Saved.');
+      await render();
+    } catch (e) {
+      handleFetchError(contentEl, e);
+    }
+  }
 
   async function render() {
-    showStatus('');
     const includePast = showPastEl.checked;
     members = await fetchChoirData('members', includePast ? { includePast: '1' } : {});
     if (!Array.isArray(members) || members.length === 0) {
@@ -78,32 +181,11 @@
         : 'No current members on the roster for this choir yet.'}</p>`;
       return;
     }
-    contentEl.innerHTML = members.map(memberCard).join('');
-    contentEl.querySelectorAll('.member-privacy input[data-priv]').forEach(cb => {
-      cb.addEventListener('change', () => savePrivacy(cb.closest('.member-privacy')));
-    });
-  }
-
-  async function savePrivacy(box) {
-    const get = (k) => box.querySelector(`input[data-priv="${k}"]`).checked ? 1 : 0;
-    box.querySelectorAll('input').forEach(i => i.disabled = true);
-    try {
-      const res = await postAction('patchMyPrivacy', {
-        choir: getActiveChoir(),
-        hideAddress: get('address'),
-        hidePhone: get('phone'),
-        hideEmail: get('email'),
-      });
-      if (!res.ok) {
-        showStatus("Couldn't save that just now. Please try again.");
-        box.querySelectorAll('input').forEach(i => i.disabled = false);
-        return;
-      }
-      showStatus('Saved.');
-      await render();
-    } catch (e) {
-      handleFetchError(contentEl, e);
-    }
+    contentEl.innerHTML = members.map((m, i) => m.IsMe ? myCard(m, i) : otherCard(m)).join('');
+    contentEl.querySelectorAll('[data-photo]').forEach(inp =>
+      inp.addEventListener('change', () => uploadPhoto(inp)));
+    contentEl.querySelectorAll('[data-save]').forEach(btn =>
+      btn.addEventListener('click', () => saveMyInfo(btn.closest('.member-me'))));
   }
 
   (async () => {
@@ -115,7 +197,8 @@
       showPastEl.checked = stored;
       showPastEl.addEventListener('change', () => {
         try { localStorage.setItem(SHOW_PAST_KEY, showPastEl.checked ? '1' : '0'); } catch (e) {}
-        render();
+        showStatus('');
+        render().catch(err => handleFetchError(contentEl, err));
       });
       await render();
     } catch (e) {
