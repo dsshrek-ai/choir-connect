@@ -39,7 +39,7 @@
           <ul class="program-list">
             ${songs.map(s => `
               <li>
-                <a href="song.html?program=${encodeURIComponent(program)}&song=${encodeURIComponent(s.SongNumber)}">
+                <a href="song.html?program=${encodeURIComponent(program)}&song=${encodeURIComponent(s.SongKey)}">
                   ${escapeHtml(s.SongTitle || ('Song ' + s.SongNumber))}
                 </a>
               </li>
