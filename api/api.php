@@ -198,11 +198,26 @@ $NUMERIC_COLUMNS = ['ChoirNumber', 'ProgramNumber', 'SongNumber', 'TrackSequence
 // blank date field is stored as NULL instead.
 $DATE_COLUMNS = ['Date'];
 
-function tableRowsWithId(string $name): array {
+// Admin sheets that belong to a single choir. In the admin panel the choir is
+// picked once up front, so these are filtered to it on read, get its
+// choir_number injected on add, and are guarded by it on update/delete.
+// 'Choirs' is not here -- its rows ARE the choirs.
+$CHOIR_SCOPED_SHEETS = ['Programs', 'RehearsalTracks', 'ChoirUsers',
+  'VolunteerTasks', 'VolunteerSignups', 'Schedule', 'Members'];
+
+function tableRowsWithId(string $name, ?int $choirNumber = null): array {
   global $DATA_TABLES;
   $spec = $DATA_TABLES[$name];
-  $result = db()->query("SELECT * FROM {$spec['table']} ORDER BY id");
-  $rows = $result->fetch_all(MYSQLI_ASSOC);
+  if ($choirNumber !== null) {
+    // Every registered table has a choir_number column.
+    $stmt = db()->prepare("SELECT * FROM {$spec['table']} WHERE choir_number = ? ORDER BY id");
+    $stmt->bind_param('i', $choirNumber);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+  } else {
+    $rows = db()->query("SELECT * FROM {$spec['table']} ORDER BY id")->fetch_all(MYSQLI_ASSOC);
+  }
   return array_map(function ($row) use ($spec) {
     $shaped = ['_row' => (int)$row['id']];
     foreach ($spec['columns'] as $jsonKey => $dbCol) {
@@ -239,11 +254,17 @@ function adminInsertRow(string $name, array $rowData): int {
   return $id;
 }
 
-function adminUpdateRow(string $name, int $id, array $rowData): void {
+function adminUpdateRow(string $name, int $id, array $rowData, ?int $choirGuard = null): void {
   global $DATA_TABLES, $NUMERIC_COLUMNS, $DATE_COLUMNS;
   $spec = $DATA_TABLES[$name];
   $sets = []; $types = ''; $values = [];
   foreach ($spec['columns'] as $jsonKey => $dbCol) {
+    // When scoped to a choir, never let an edit re-assign choir_number -- the
+    // admin panel hides that field, so rowData wouldn't carry the real value,
+    // and a row must stay with the choir it belongs to.
+    if ($choirGuard !== null && $dbCol === 'choir_number') {
+      continue;
+    }
     $sets[] = "$dbCol = ?";
     if (in_array($jsonKey, $NUMERIC_COLUMNS, true)) {
       $types .= 'i';
@@ -256,22 +277,42 @@ function adminUpdateRow(string $name, int $id, array $rowData): void {
       $values[] = (string)($rowData[$jsonKey] ?? '');
     }
   }
+  $sql = "UPDATE {$spec['table']} SET " . implode(', ', $sets) . ' WHERE id = ?';
   $types .= 'i';
   $values[] = $id;
-  $sql = "UPDATE {$spec['table']} SET " . implode(', ', $sets) . ' WHERE id = ?';
+  if ($choirGuard !== null) {
+    $sql .= ' AND choir_number = ?';
+    $types .= 'i';
+    $values[] = $choirGuard;
+  }
   $stmt = db()->prepare($sql);
   $stmt->bind_param($types, ...$values);
   $stmt->execute();
   $stmt->close();
 }
 
-function adminDeleteRow(string $name, int $id): void {
+function adminDeleteRow(string $name, int $id, ?int $choirGuard = null): void {
   global $DATA_TABLES;
   $spec = $DATA_TABLES[$name];
-  $stmt = db()->prepare("DELETE FROM {$spec['table']} WHERE id = ?");
-  $stmt->bind_param('i', $id);
+  $sql = "DELETE FROM {$spec['table']} WHERE id = ?";
+  $types = 'i'; $values = [$id];
+  if ($choirGuard !== null) {
+    $sql .= ' AND choir_number = ?';
+    $types .= 'i';
+    $values[] = $choirGuard;
+  }
+  $stmt = db()->prepare($sql);
+  $stmt->bind_param($types, ...$values);
   $stmt->execute();
   $stmt->close();
+}
+
+// Choir number to scope an admin write by, or null if the sheet isn't
+// choir-scoped or no choir was supplied.
+function adminChoirGuard(string $name, int $choir): ?int {
+  global $CHOIR_SCOPED_SHEETS;
+  return ($choir > 0 && (in_array($name, $CHOIR_SCOPED_SHEETS, true) || $name === 'Choirs'))
+    ? $choir : null;
 }
 
 // ---- Member reads ----
@@ -905,12 +946,30 @@ switch ($action) {
     respond(['ok' => true, 'displayName' => $user['display_name']]);
   }
 
+  // Every choir, for the admin panel's choir picker.
+  case 'adminChoirs': {
+    $user = requireUser();
+    requireChoirConnectAdminAccess($user);
+    respond(['ok' => true, 'rows' => tableRowsWithId('Choirs')]);
+  }
+
   case 'adminList': {
     $user = requireUser();
     requireChoirConnectAdminAccess($user);
     $name = (string)($body['sheet'] ?? '');
     if (!array_key_exists($name, $DATA_TABLES)) {
       respond(['ok' => false, 'reason' => 'unknown-sheet']);
+    }
+    $choir = (int)($body['choir'] ?? 0);
+    if (in_array($name, $CHOIR_SCOPED_SHEETS, true)) {
+      if ($choir <= 0) {
+        respond(['ok' => false, 'reason' => 'no-choir']);
+      }
+      respond(['ok' => true, 'rows' => tableRowsWithId($name, $choir)]);
+    }
+    if ($name === 'Choirs' && $choir > 0) {
+      // Editing just the selected choir's own row.
+      respond(['ok' => true, 'rows' => tableRowsWithId('Choirs', $choir)]);
     }
     respond(['ok' => true, 'rows' => tableRowsWithId($name)]);
   }
@@ -922,7 +981,29 @@ switch ($action) {
     if (!array_key_exists($name, $DATA_TABLES)) {
       respond(['ok' => false, 'reason' => 'unknown-sheet']);
     }
-    $id = adminInsertRow($name, (array)($body['row'] ?? []));
+    $choir = (int)($body['choir'] ?? 0);
+    $row = (array)($body['row'] ?? []);
+    if (in_array($name, $CHOIR_SCOPED_SHEETS, true)) {
+      if ($choir <= 0) {
+        respond(['ok' => false, 'reason' => 'no-choir']);
+      }
+      $row['ChoirNumber'] = $choir; // the panel no longer sends it -- inject it
+    } elseif ($name === 'Choirs') {
+      // New-choir flow: enforce a unique choir number.
+      $newNum = (int)($row['ChoirNumber'] ?? 0);
+      if ($newNum <= 0) {
+        respond(['ok' => false, 'reason' => 'invalid-choir-number']);
+      }
+      $chk = db()->prepare('SELECT 1 FROM cc_choirs WHERE choir_number = ? LIMIT 1');
+      $chk->bind_param('i', $newNum);
+      $chk->execute();
+      $exists = (bool)$chk->get_result()->fetch_row();
+      $chk->close();
+      if ($exists) {
+        respond(['ok' => false, 'reason' => 'duplicate-choir']);
+      }
+    }
+    $id = adminInsertRow($name, $row);
     respond(['ok' => true, 'id' => $id]);
   }
 
@@ -937,7 +1018,8 @@ switch ($action) {
     if ($rowId <= 0) {
       respond(['ok' => false, 'reason' => 'invalid-row']);
     }
-    adminUpdateRow($name, $rowId, (array)($body['values'] ?? []));
+    $choir = (int)($body['choir'] ?? 0);
+    adminUpdateRow($name, $rowId, (array)($body['values'] ?? []), adminChoirGuard($name, $choir));
     respond(['ok' => true]);
   }
 
@@ -952,7 +1034,8 @@ switch ($action) {
     if ($rowId <= 0) {
       respond(['ok' => false, 'reason' => 'invalid-row']);
     }
-    adminDeleteRow($name, $rowId);
+    $choir = (int)($body['choir'] ?? 0);
+    adminDeleteRow($name, $rowId, adminChoirGuard($name, $choir));
     respond(['ok' => true]);
   }
 

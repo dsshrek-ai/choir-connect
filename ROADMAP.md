@@ -29,9 +29,12 @@ Status of the app and what's planned next. See `STACK.md` for architecture and
   and Status stay admin/hub controlled. Hidden fields are stripped from the API
   for everyone except that singer and the admin kiosk. API: `members`; table
   `cc_members`; admin editor `Members`.
-- **Admin kiosk** (`admin.html`) — generic editor for Choirs, Programs,
-  RehearsalTracks, ChoirUsers (assign users to choirs), VolunteerTasks,
-  VolunteerSignups, Schedule, Members.
+- **Admin kiosk** (`admin.html`) — pick a choir (or **+ New choir**) once, then
+  edit that choir's Programs, Rehearsal tracks, Choir users, Volunteer tasks /
+  signups, Schedule, Members and its own details. Choir number is never typed on
+  child rows — it's injected server‑side from the picked choir, and every table
+  shows only that choir's rows. `adminChoirs` lists choirs; `adminList` / `Add` /
+  `Update` / `Delete` take a `choir` and scope/guard by it.
 - **Two-layer auth** — My Apps Hub `app_access` grant (`choir-connect` /
   `choir-connect-admin`) + `cc_choir_users` per-choir scoping. Usage logged to
   the shared `app_usage_log`.

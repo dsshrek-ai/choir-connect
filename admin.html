@@ -23,9 +23,14 @@
     box-sizing: border-box;
   }
   table.admin-table input[type="number"] { min-width: 4.5rem; }
+  table.admin-table input:disabled { background: var(--color-pinned-bg); color: var(--color-primary-dark); }
   table.admin-table td:last-child { white-space: nowrap; }
   table.admin-table .btn { font-size: 0.9rem; padding: 0.4rem 0.7rem; margin: 0.1rem; }
   .hint { font-size: 0.9rem; color: var(--color-primary-dark); margin: 0.25rem 0 1rem; }
+  #choir-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0.5rem 0 1rem; }
+  #choir-bar select { width: auto; min-width: 12rem; }
+  #new-choir-form label { display: block; font-weight: bold; margin-top: 0.6rem; }
+  #new-choir-form input { display: block; margin-top: 0.2rem; }
 </style>
 </head>
 <body>
@@ -47,16 +52,40 @@
 
   <div id="panel" style="display:none;">
     <p><button id="logout-btn" class="btn">Log Out</button></p>
-    <label for="table-select">Table</label>
-    <select id="table-select"></select>
-    <p class="hint" id="table-hint"></p>
-    <div id="status" class="placeholder-note" style="display:none;"></div>
-    <div id="table-container"></div>
+
+    <div id="choir-bar">
+      <label for="choir-select">Choir</label>
+      <select id="choir-select"></select>
+      <button id="new-choir-btn" class="btn" type="button">&#43; New choir</button>
+    </div>
+
+    <div id="new-choir-form" class="card" style="display:none;">
+      <h3>New choir</h3>
+      <p id="nc-error" class="placeholder-note" style="display:none;"></p>
+      <label>Choir Number <input type="number" id="nc-number"></label>
+      <label>Name <input type="text" id="nc-name"></label>
+      <label>Folder Slug <span class="song-part-desc">(folder under the files root, e.g. "DeciBelles")</span>
+        <input type="text" id="nc-slug"></label>
+      <p>
+        <button id="nc-create" class="btn" type="button">Create</button>
+        <button id="nc-cancel" class="btn" type="button">Cancel</button>
+      </p>
+    </div>
+
+    <div id="table-area">
+      <label for="table-select">Table</label>
+      <select id="table-select"></select>
+      <p class="hint" id="table-hint"></p>
+      <div id="status" class="placeholder-note" style="display:none;"></div>
+      <div id="table-container"></div>
+    </div>
   </div>
 </main>
 <footer class="site-footer">Choir Connect &mdash; admin maintenance panel</footer>
 <script src="js/api.js"></script>
 <script>
+  // Master column lists (as stored). ChoirNumber is hidden in the UI for the
+  // choir-scoped sheets -- it's set from the picked choir on the server.
   const TABLES = {
     Choirs: ['ChoirNumber', 'Name', 'FolderSlug', 'Index'],
     Programs: ['ChoirNumber', 'ProgramNumber', 'Name', 'Sequence', 'Index'],
@@ -67,15 +96,23 @@
     Schedule: ['ChoirNumber', 'Date', 'Time', 'Title', 'Location', 'MapUrl', 'Instructions', 'Notes', 'Index'],
     Members: ['ChoirNumber', 'Name', 'Status', 'Address', 'Phone', 'Email', 'PhotoUrl', 'HideAddress', 'HidePhone', 'HideEmail', 'Index'],
   };
+  const SCOPED_TABLES = ['Programs', 'RehearsalTracks', 'ChoirUsers', 'VolunteerTasks', 'VolunteerSignups', 'Schedule', 'Members'];
+  // Dropdown order + friendly labels. 'Choirs' edits the selected choir itself.
+  const TABLE_ORDER = ['Choirs', ...SCOPED_TABLES];
+  const TABLE_LABELS = {
+    Choirs: 'Choir details', Programs: 'Programs', RehearsalTracks: 'Rehearsal tracks',
+    ChoirUsers: 'Choir users', VolunteerTasks: 'Volunteer tasks', VolunteerSignups: 'Volunteer signups',
+    Schedule: 'Schedule', Members: 'Members',
+  };
   const TABLE_HINTS = {
-    Choirs: 'One row per choir. FolderSlug is the folder name under the files root that holds this choir’s Songs/ folder (e.g. "DeciBelles"). Index sets the order in the choir picker.',
+    Choirs: 'Details of the choir you have selected above. FolderSlug is the folder under the files root that holds this choir’s Songs/ folder. Index orders the choir picker in the member app. To add another choir use “+ New choir”.',
     Programs: 'A program is a concert / season / set list. Sequence controls order — the highest Sequence shows first ("most recent program on top").',
     RehearsalTracks: 'One row per audio file. Tracks group by SongNumber. SongFolder + FileName locate the file: <FilesRoot>/<choir FolderSlug>/Songs/<SongFolder>/<FileName>. TrackSequence orders tracks within a song.',
-    ChoirUsers: 'Assign apps-hub users to choirs. UserEmail must exactly match the email they sign in with. A person also needs the "Choir Connect" app granted in My Apps Hub to open the app at all.',
-    VolunteerTasks: 'Volunteer needs for a choir. Date is optional. SlotsNeeded is how many people can sign up. Index orders the list on the member Volunteer page.',
-    VolunteerSignups: 'Read-only, mostly — members add these from the Volunteer page. Email is the member’s login; that’s how "cancel my signup" finds their row. Delete a row here to free a slot.',
-    Schedule: 'Rehearsals and events for a choir. Time is free text ("7:00 PM"). Leave MapUrl blank to auto-link the Location text to Google Maps, or paste a specific map link. The member page shows newest first and keeps past events; same-day order is by Index.',
-    Members: 'The choir roster. Status "Past" hides the member unless a viewer ticks "Show past members". If Email matches the member’s login, they can edit their own Name / Address / Phone / Photo and Hide flags from the Members page (their edits apply to all their choirs). PhotoUrl: a bare filename means a file in the Photos folder (member-uploaded or FTP’d); a full http(s) link is used as-is.',
+    ChoirUsers: 'Who may open this choir in the member app. UserEmail must exactly match the email they sign in with, and they also need the "Choir Connect" app granted in My Apps Hub.',
+    VolunteerTasks: 'Volunteer needs. Date is optional. SlotsNeeded is how many people can sign up. Index orders the list on the member Volunteer page.',
+    VolunteerSignups: 'Mostly read-only — members add these from the Volunteer page. Email is the member’s login; that’s how "cancel my signup" finds their row. Delete a row here to free a slot.',
+    Schedule: 'Rehearsals and events. Time is free text ("7:00 PM"). Leave MapUrl blank to auto-link the Location text to Google Maps, or paste a specific map link. The member page shows newest first and keeps past events; same-day order is by Index.',
+    Members: 'The roster. Status "Past" hides the member unless a viewer ticks "Show past members". If Email matches the member’s login, they can edit their own Name / Address / Phone / Photo and Hide flags from the Members page. PhotoUrl: a bare filename means a file in the Photos folder; a full http(s) link is used as-is.',
   };
   const NUMBER_COLUMNS = new Set(['ChoirNumber', 'ProgramNumber', 'SongNumber', 'Sequence', 'TrackSequence', 'SlotsNeeded', 'Index']);
   const DATE_COLUMNS = new Set(['Date']);
@@ -85,20 +122,29 @@
   const loginScreen = document.getElementById('login-screen');
   const panel = document.getElementById('panel');
   const authError = document.getElementById('auth-error');
+  const choirSelect = document.getElementById('choir-select');
+  const newChoirBtn = document.getElementById('new-choir-btn');
+  const newChoirForm = document.getElementById('new-choir-form');
+  const ncError = document.getElementById('nc-error');
+  const tableArea = document.getElementById('table-area');
   const tableSelect = document.getElementById('table-select');
   const tableHint = document.getElementById('table-hint');
   const tableContainer = document.getElementById('table-container');
   const statusEl = document.getElementById('status');
+
+  const CHOIR_KEY = 'ccAdminChoir';
+  let selectedChoir = null;
+  let choirs = [];
+  let paneInited = false;
 
   function showStatus(message) {
     statusEl.textContent = message;
     statusEl.style.display = '';
   }
 
-  // Session-scoped, not localStorage: this panel edits real data and may run
-  // on a shared computer, so the login clears itself when the tab closes.
+  // Session-scoped, not localStorage.
   const AUTH_KEY = 'ccAdminAuth';
-  let auth = null; // { token, displayName }
+  let auth = null;
   function loadAuth() { try { return JSON.parse(sessionStorage.getItem(AUTH_KEY)); } catch { return null; } }
   function saveAuth(a) { sessionStorage.setItem(AUTH_KEY, JSON.stringify(a)); }
   function clearAuth() { sessionStorage.removeItem(AUTH_KEY); }
@@ -117,12 +163,7 @@
   }
 
   async function checkAccess() {
-    try {
-      const result = await callAdmin('checkAccess');
-      return !!result.ok;
-    } catch (e) {
-      return false;
-    }
+    try { return !!(await callAdmin('checkAccess')).ok; } catch (e) { return false; }
   }
 
   function showLogin(message) {
@@ -134,15 +175,107 @@
     if (message) authError.textContent = message;
   }
 
-  function showPanel() {
+  async function showPanel() {
     loginScreen.style.display = 'none';
     panel.style.display = '';
-    if (!tableSelect.options.length) {
-      tableSelect.innerHTML = Object.keys(TABLES).map(t => `<option value="${t}">${t}</option>`).join('');
+    if (!paneInited) {
+      paneInited = true;
+      tableSelect.innerHTML = TABLE_ORDER.map(t => `<option value="${t}">${TABLE_LABELS[t]}</option>`).join('');
       tableSelect.addEventListener('change', () => loadTable(tableSelect.value));
-      loadTable(tableSelect.value);
+      choirSelect.addEventListener('change', () => {
+        selectedChoir = Number(choirSelect.value) || null;
+        try { sessionStorage.setItem(CHOIR_KEY, String(selectedChoir)); } catch (e) {}
+        loadTable(tableSelect.value);
+      });
+      newChoirBtn.addEventListener('click', () => openNewChoir());
+      document.getElementById('nc-cancel').addEventListener('click', () => closeNewChoir());
+      document.getElementById('nc-create').addEventListener('click', createChoir);
     }
+    await initChoirBar();
   }
+
+  async function initChoirBar() {
+    let result;
+    try { result = await callAdmin('adminChoirs'); } catch (e) { result = { ok: false }; }
+    if (!result.ok) {
+      if (/session|authoriz/i.test(result.error || '')) {
+        showLogin('Your saved login stopped working. Please log in again.');
+      } else {
+        tableContainer.innerHTML = `<p class="placeholder-note">Couldn't load choirs. Please try again.</p>`;
+      }
+      return;
+    }
+    // tableRowsWithId returns numbers as strings; normalise so number
+    // comparisons below (and the saved selection) work.
+    choirs = (result.rows || []).map(c => ({ ...c, ChoirNumber: Number(c.ChoirNumber) }));
+    choirSelect.innerHTML = choirs
+      .map(c => `<option value="${c.ChoirNumber}">${escapeHtml(String(c.ChoirNumber))} &mdash; ${escapeHtml(c.Name || '')}</option>`)
+      .join('');
+
+    if (choirs.length === 0) {
+      selectedChoir = null;
+      tableArea.style.display = 'none';
+      openNewChoir(true);
+      return;
+    }
+
+    let stored = null;
+    try { stored = Number(sessionStorage.getItem(CHOIR_KEY)) || null; } catch (e) {}
+    if (!stored || !choirs.some(c => c.ChoirNumber === stored)) {
+      stored = choirs[0].ChoirNumber;
+    }
+    selectedChoir = stored;
+    choirSelect.value = String(selectedChoir);
+    try { sessionStorage.setItem(CHOIR_KEY, String(selectedChoir)); } catch (e) {}
+    tableArea.style.display = '';
+    closeNewChoir();
+    loadTable(tableSelect.value);
+  }
+
+  function openNewChoir(forced) {
+    ncError.style.display = 'none';
+    document.getElementById('nc-number').value = '';
+    document.getElementById('nc-name').value = '';
+    document.getElementById('nc-slug').value = '';
+    newChoirForm.style.display = '';
+    document.getElementById('nc-cancel').style.display = forced ? 'none' : '';
+    newChoirForm.querySelector('h3').textContent = forced ? 'Create your first choir' : 'New choir';
+  }
+  function closeNewChoir() { newChoirForm.style.display = 'none'; }
+
+  async function createChoir() {
+    const number = Number(document.getElementById('nc-number').value);
+    const name = document.getElementById('nc-name').value.trim();
+    const slug = document.getElementById('nc-slug').value.trim();
+    if (!number || number <= 0 || !name) {
+      ncError.textContent = 'Enter a choir number and a name.';
+      ncError.style.display = '';
+      return;
+    }
+    const btn = document.getElementById('nc-create');
+    btn.disabled = true;
+    const result = await callAdmin('adminAdd', {
+      sheet: 'Choirs',
+      row: { ChoirNumber: number, Name: name, FolderSlug: slug, Index: 0 },
+    }).catch(() => ({ ok: false }));
+    btn.disabled = false;
+    if (!result.ok) {
+      ncError.textContent = result.reason === 'duplicate-choir'
+        ? `Choir number ${number} already exists.`
+        : 'Could not create that choir. Please try again.';
+      ncError.style.display = '';
+      return;
+    }
+    try { sessionStorage.setItem(CHOIR_KEY, String(number)); } catch (e) {}
+    await initChoirBar();
+  }
+
+  document.getElementById('login-btn').addEventListener('click', attemptLogin);
+  document.getElementById('login-pw').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') attemptLogin(); });
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    try { await callAdmin('logout', { token: auth.token }); } catch (e) {}
+    showLogin();
+  });
 
   async function attemptLogin() {
     const username = document.getElementById('login-email').value.trim();
@@ -169,62 +302,63 @@
     }
   }
 
-  document.getElementById('login-btn').addEventListener('click', attemptLogin);
-  document.getElementById('login-pw').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') attemptLogin(); });
+  function visibleColumns(name) {
+    return SCOPED_TABLES.includes(name)
+      ? TABLES[name].filter(c => c !== 'ChoirNumber')
+      : TABLES[name];
+  }
 
-  document.getElementById('logout-btn').addEventListener('click', async () => {
-    try { await callAdmin('logout', { token: auth.token }); } catch (e) {}
-    showLogin();
-  });
-
-  function fieldInput(col, value) {
+  function fieldInput(col, value, readOnly) {
     const safeVal = escapeHtml(value ?? '');
+    const dis = readOnly ? ' disabled' : '';
     if (DATE_COLUMNS.has(col)) {
-      // value is 'YYYY-MM-DD' from the API, or '' -- what <input type="date"> wants.
-      return `<input type="date" data-col="${col}" value="${safeVal}">`;
+      return `<input type="date" data-col="${col}" value="${safeVal}"${dis}>`;
     }
     if (STATUS_COLUMNS.has(col)) {
       const v = (value || 'Current');
-      return `<select data-col="${col}">
+      return `<select data-col="${col}"${dis}>
         <option value="Current" ${v === 'Current' ? 'selected' : ''}>Current</option>
         <option value="Past" ${v === 'Past' ? 'selected' : ''}>Past</option>
       </select>`;
     }
     if (BOOL_COLUMNS.has(col)) {
       const yes = Number(value) === 1;
-      return `<select data-col="${col}">
+      return `<select data-col="${col}"${dis}>
         <option value="0" ${yes ? '' : 'selected'}>No</option>
         <option value="1" ${yes ? 'selected' : ''}>Yes</option>
       </select>`;
     }
     if (NUMBER_COLUMNS.has(col)) {
-      return `<input type="number" data-col="${col}" value="${escapeHtml(value ?? '0')}">`;
+      return `<input type="number" data-col="${col}" value="${escapeHtml(value ?? '0')}"${dis}>`;
     }
-    return `<input type="text" data-col="${col}" value="${safeVal}">`;
+    return `<input type="text" data-col="${col}" value="${safeVal}"${dis}>`;
   }
 
   function readRow(tr, columns) {
     const values = {};
     columns.forEach(col => {
       const el = tr.querySelector(`[data-col="${col}"]`);
-      values[col] = el.value;
+      if (el) values[col] = el.value;
     });
     return values;
   }
 
   async function loadTable(name) {
+    if (!selectedChoir) return;
     tableHint.textContent = TABLE_HINTS[name] || '';
     tableContainer.innerHTML = 'Loading…';
     let result;
     try {
-      result = await callAdmin('adminList', { sheet: name });
+      result = await callAdmin('adminList', { sheet: name, choir: selectedChoir });
     } catch (e) {
-      tableContainer.innerHTML = `<p class="placeholder-note">Couldn't load ${escapeHtml(name)}. Please try again.</p>`;
+      tableContainer.innerHTML = `<p class="placeholder-note">Couldn't load ${escapeHtml(TABLE_LABELS[name] || name)}. Please try again.</p>`;
       return;
     }
     if (!result.ok) {
       if (/session|authoriz/i.test(result.error || '')) {
         showLogin('Your saved login stopped working. Please log in again.');
+      } else if (result.reason === 'no-choir') {
+        tableContainer.innerHTML = `<p class="placeholder-note">Pick or create a choir first.</p>`;
       } else {
         tableContainer.innerHTML = `<p class="placeholder-note">Not authorized.</p>`;
       }
@@ -234,24 +368,27 @@
   }
 
   function renderTable(name, rows) {
-    const columns = TABLES[name];
+    const columns = visibleColumns(name);
+    const isChoirs = name === 'Choirs';
     const headHtml = columns.map(c => `<th scope="col">${c}</th>`).join('') + '<th scope="col">Actions</th>';
     const bodyHtml = rows.map(r => `
       <tr data-row="${r._row}">
-        ${columns.map(c => `<td>${fieldInput(c, r[c])}</td>`).join('')}
+        ${columns.map(c => `<td>${fieldInput(c, r[c], isChoirs && c === 'ChoirNumber')}</td>`).join('')}
         <td>
           <button class="btn" data-action="save">Save</button>
           <button class="btn" data-action="delete">Delete</button>
         </td>
       </tr>
     `).join('');
-    const addRowHtml = `
+    const addRowHtml = isChoirs ? '' : `
       <tr id="add-row">
         ${columns.map(c => `<td>${fieldInput(c, '')}</td>`).join('')}
         <td><button class="btn" data-action="add">Add</button></td>
       </tr>
     `;
-    tableContainer.innerHTML = `
+    const emptyNote = (!rows.length && isChoirs)
+      ? `<p class="placeholder-note">This choir has no details row — unexpected. Try “+ New choir”.</p>` : '';
+    tableContainer.innerHTML = emptyNote + `
       <div class="admin-table-wrap">
         <table class="admin-table">
           <thead><tr>${headHtml}</tr></thead>
@@ -271,7 +408,7 @@
     if (action === 'add') {
       const row = readRow(tr, columns);
       button.disabled = true;
-      const result = await callAdmin('adminAdd', { sheet: name, row }).catch(() => ({ ok: false }));
+      const result = await callAdmin('adminAdd', { sheet: name, choir: selectedChoir, row }).catch(() => ({ ok: false }));
       if (result.ok) {
         loadTable(name);
       } else {
@@ -286,18 +423,27 @@
     if (action === 'save') {
       const values = readRow(tr, columns);
       button.disabled = true;
-      const result = await callAdmin('adminUpdate', { sheet: name, row: rowNumber, values }).catch(() => ({ ok: false }));
+      const result = await callAdmin('adminUpdate', { sheet: name, choir: selectedChoir, row: rowNumber, values }).catch(() => ({ ok: false }));
       showStatus(result.ok ? 'Saved.' : 'Could not save that row. Please try again.');
       button.disabled = false;
+      if (result.ok && name === 'Choirs') initChoirBar();  // name may have changed
       return;
     }
 
     if (action === 'delete') {
-      if (!confirm('Delete this row? This cannot be undone.')) return;
+      const msg = name === 'Choirs'
+        ? 'Delete this choir? Its programs, tracks, members, schedule and volunteer data are NOT removed automatically. This cannot be undone.'
+        : 'Delete this row? This cannot be undone.';
+      if (!confirm(msg)) return;
       button.disabled = true;
-      const result = await callAdmin('adminDelete', { sheet: name, row: rowNumber }).catch(() => ({ ok: false }));
+      const result = await callAdmin('adminDelete', { sheet: name, choir: selectedChoir, row: rowNumber }).catch(() => ({ ok: false }));
       if (result.ok) {
-        loadTable(name);
+        if (name === 'Choirs') {
+          try { sessionStorage.removeItem(CHOIR_KEY); } catch (e) {}
+          initChoirBar();
+        } else {
+          loadTable(name);
+        }
       } else {
         showStatus('Could not delete that row. Please try again.');
         button.disabled = false;
@@ -306,8 +452,6 @@
   }
 
   (async () => {
-    // Single sign-on: My Apps Hub launches this app with ?token=... when the
-    // visitor is already logged in there, so this skips its own login screen.
     const ssoToken = new URLSearchParams(window.location.search).get('token');
     if (ssoToken) {
       auth = { token: ssoToken, displayName: '' };

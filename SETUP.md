@@ -60,21 +60,26 @@ live at `https://dsshrek-ai.github.io/choir-connect/`.
 
 ## 7. Add real content (admin.html)
 
-Order matters because rows reference each other by number:
+**Pick a choir first.** When you open the panel, choose the choir you're working
+on from the **Choir** dropdown, or click **+ New choir** (enter a choir number,
+name, and folder slug). Everything below is then scoped to that choir — you never
+type a choir number again, and each table only shows that choir's rows. Switch
+choirs any time from the same dropdown.
 
-1. **Choirs** — one row per choir. `ChoirNumber` is yours to assign; `Name` is
-   the display name; `FolderSlug` is the folder under `SONG_FILES_BASE_URL` that
-   holds this choir's `Songs/` folder (e.g. `DeciBelles`); `Index` orders the
-   choir picker.
-2. **Programs** — a program is a concert / season / set list. `Sequence` controls
-   order: the **highest Sequence shows first** ("most recent program on top").
-3. **RehearsalTracks** — one row per audio file. Rows with the same `SongNumber`
-   are grouped as one song in the app (`SongTitle` labels that group).
-   `TrackName` is the part label (e.g. "Soprano"); `ShortDescription` is optional
-   helper text; `TrackSequence` orders tracks within a song. `SongFolder` +
-   `FileName` locate the file (next step).
-4. **ChoirUsers** — assign each singer's apps-hub email to their choir(s). They
-   also need the **Choir Connect** app granted in My Apps Hub to open the app.
+Then work through the **Table** dropdown:
+
+- **Choir details** — the selected choir's `Name`, `FolderSlug` (the folder under
+  `SONG_FILES_BASE_URL` holding its `Songs/` folder, e.g. `DeciBelles`) and
+  `Index` (order in the member app's choir picker). The choir number can't be
+  changed here.
+- **Programs** — a program is a concert / season / set list. `Sequence` controls
+  order: the **highest Sequence shows first** ("most recent program on top").
+- **Rehearsal tracks** — one row per audio file. Rows with the same `SongNumber`
+  are grouped as one song (`SongTitle` labels that group). `TrackName` is the
+  part label (e.g. "Soprano"); `TrackSequence` orders tracks within a song.
+  `SongFolder` + `FileName` locate the file (next step).
+- **Choir users** — the apps-hub emails allowed to open this choir in the member
+  app. They also need the **Choir Connect** app granted in My Apps Hub.
 
 ## 8. Upload rehearsal track files
 
@@ -122,10 +127,10 @@ deploy, so:
    block) in phpMyAdmin.
 2. **Redeploy** — re-upload `api/api.php`, and push the repo so GitHub Pages picks
    up `volunteer.html`, `js/api.js` (nav link), `style.css`, and `admin.html`.
-3. **Post needs** — in `admin.html` → **VolunteerTasks**, add a row per need:
-   `ChoirNumber`, an optional `Date`, `TaskName`, `SlotsNeeded`, `Index` (list
-   order). Members then sign up from the Volunteer page; their signups show under
-   **VolunteerSignups** (delete a row there to free a slot).
+3. **Post needs** — in `admin.html`, pick the choir, then **Volunteer tasks**:
+   add a row per need — an optional `Date`, `TaskName`, `SlotsNeeded`, `Index`
+   (list order). Members then sign up from the Volunteer page; their signups show
+   under **Volunteer signups** (delete a row there to free a slot).
 
 `Email` on a signup is the member's login email — that's how "Cancel my signup"
 finds their row. No notification email is sent in v1.
@@ -139,8 +144,8 @@ first, with past events kept on the list. Added after the Volunteer feature, so:
    "SCHEMA CHANGE: Schedule" block) in phpMyAdmin.
 2. **Redeploy** — re-upload `api/api.php`, and push the repo so GitHub Pages picks
    up `schedule.html`, `js/api.js` (nav link), `style.css`, and `admin.html`.
-3. **Add events** — in `admin.html` → **Schedule**, add a row per event:
-   `ChoirNumber`, `Date`, `Time` (free text like "7:00 PM"), `Title`, `Location`,
+3. **Add events** — in `admin.html`, pick the choir, then **Schedule**: add a row
+   per event — `Date`, `Time` (free text like "7:00 PM"), `Title`, `Location`,
    `MapUrl` (leave blank to auto-link the Location to Google Maps, or paste a
    specific link), `Instructions`, `Notes`, `Index` (order among same-day events).
 
@@ -152,11 +157,11 @@ The Members page (`members.html`) shows a choir's roster. Added after Schedule, 
    "SCHEMA CHANGE: Member List" block) in phpMyAdmin.
 2. **Redeploy** — re-upload `api/api.php`, and push the repo so GitHub Pages picks
    up `members.html`, `js/api.js` (nav link), `style.css`, and `admin.html`.
-3. **Add members** — in `admin.html` → **Members**, one row per singer:
-   `ChoirNumber`, `Name`, `Status` (Current / Past), `Address`, `Phone`, `Email`,
+3. **Add members** — in `admin.html`, pick the choir, then **Members**: one row
+   per singer — `Name`, `Status` (Current / Past), `Address`, `Phone`, `Email`,
    `PhotoUrl`, `HideAddress` / `HidePhone` / `HideEmail` (No / Yes), `Index`.
-   You mainly need `ChoirNumber`, `Name`, and `Email` — the singer can fill in
-   the rest themselves (next point).
+   You mainly need `Name` and `Email` — the singer fills in the rest themselves
+   (next point).
 
 - **Status "Past"** hides the member on the page unless the viewer ticks
   **"Show past members"** (default off; the choice is remembered per browser).
