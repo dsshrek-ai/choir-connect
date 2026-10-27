@@ -297,6 +297,15 @@ form label {
 }
 
 /* Schedule (schedule.html) */
+/* Heavy line between upcoming and past events */
+.sched-rule {
+  border: 0;
+  border-top: 4px solid var(--color-primary-dark);
+  margin: 2rem 0 0;
+}
+
+.sched-rule + .sched-divider { margin-top: 0.75rem; border-bottom: 0; }
+
 .sched-divider {
   margin: 1.5rem 0 0.75rem;
   font-weight: bold;

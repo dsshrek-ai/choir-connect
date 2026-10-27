@@ -15,7 +15,7 @@
 </header>
 <main id="main-content">
   <h2>Schedule</h2>
-  <p class="song-part-desc">Rehearsals and events, newest first. Past events stay on the list.</p>
+  <p class="song-part-desc">Upcoming rehearsals and events, soonest first. Past events are listed below the line.</p>
   <div id="content">Loading schedule&hellip;</div>
 </main>
 <footer class="site-footer">Choir Connect</footer>
@@ -66,15 +66,19 @@
         el.innerHTML = `<p class="placeholder-note">Nothing on the schedule for this choir yet.</p>`;
         return;
       }
-      let html = '';
-      let dividerDone = false;
-      entries.forEach(e => {
-        if (!dividerDone && isPast(e.Date)) {
-          html += `<p class="sched-divider">Past</p>`;
-          dividerDone = true;
-        }
-        html += entryCard(e);
-      });
+      // Earliest to latest. Undated entries aren't past, so they close out the
+      // upcoming list; past events go below a heavy line. The sort is stable, so
+      // entries on the same date keep the order they were entered in.
+      const byDate = (a, b) => String(a.Date).localeCompare(String(b.Date));
+      const upcoming = entries.filter(e => e.Date && !isPast(e.Date)).sort(byDate);
+      const undated = entries.filter(e => !e.Date);
+      const past = entries.filter(e => e.Date && isPast(e.Date)).sort(byDate);
+
+      let html = upcoming.concat(undated).map(entryCard).join('')
+        || `<p class="placeholder-note">Nothing coming up right now.</p>`;
+      if (past.length) {
+        html += `<hr class="sched-rule"><p class="sched-divider">Past events</p>${past.map(entryCard).join('')}`;
+      }
       el.innerHTML = html;
     } catch (e) {
       handleFetchError(el, e);
